@@ -16,10 +16,6 @@
  */
 `include "mips_core.svh"
 
-`ifdef SIMULATION
-import "DPI-C" function void stats_event (input string e);
-`endif
-
 module hazard_controller (
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
@@ -69,6 +65,8 @@ module hazard_controller (
 	logic prev_dc_miss;		// Prev value of D-cache miss
 	logic inc_dc_amiss;		// Increment D-cache access miss counter
 
+	logic branch_miss;
+	logic branch_hit;
 
 	// Determine if we have these hazards
 	always_comb
@@ -216,7 +214,6 @@ module hazard_controller (
 			stats_event("dc_miss_access");
 			inc_dc_amiss = 1'b0;
 		end
-
 		if (ic_miss) stats_event("ic_miss");
 		if (ds_miss) stats_event("ds_miss");
 		if (dec_overload) stats_event("dec_overload");

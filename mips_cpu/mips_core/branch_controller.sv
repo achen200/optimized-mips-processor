@@ -9,6 +9,10 @@
  * See wiki page "Branch and Jump" for details.
  */
 `include "mips_core.svh"
+`ifdef SIMULATION
+import "DPI-C" function void stats_event (input string e);
+`endif
+
 
 module branch_controller (
 	input clk,    // Clock
@@ -23,9 +27,12 @@ module branch_controller (
 	branch_result_ifc.in ex_branch_result
 );
 	logic request_prediction;
+	logic prev_req;
+	logic branch_count;
+	logic branch_miss;
 
 	// Change the following line to switch predictor
-	branch_predictor_backward_taken PREDICTOR (
+	branch_predictor_2bit PREDICTOR (
 		.clk, .rst_n,
 
 		.i_req_valid     (request_prediction),
@@ -41,12 +48,36 @@ module branch_controller (
 
 	always_comb
 	begin
+		prev_req = request_prediction;
 		request_prediction = dec_branch_decoded.valid & ~dec_branch_decoded.is_jump;
+
+		if(~prev_req & request_prediction) branch_count = 1'b1;
+		if(ex_branch_result.valid & (ex_branch_result.prediction != ex_branch_result.outcome))
+		begin
+			branch_miss = 1'b1;
+		end
+
 		dec_branch_decoded.recovery_target =
 			(dec_branch_decoded.prediction == TAKEN)
 			? dec_pc.pc + `ADDR_WIDTH'd8
 			: dec_branch_decoded.target;
+		
 	end
+`ifdef SIMULATION
+	always_ff @(posedge clk)
+	begin
+		if(branch_count) 
+		begin
+			stats_event("branch_pred");
+			branch_count = 1'b0;
+		end
+		if(branch_miss)
+		begin
+			stats_event("branch_miss");
+			branch_miss = 1'b0;
+		end
+	end
+`endif
 
 endmodule
 
