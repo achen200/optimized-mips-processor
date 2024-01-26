@@ -32,7 +32,7 @@ module branch_controller (
 	logic branch_miss;
 
 	// Change the following line to switch predictor
-	branch_predictor_2bit PREDICTOR (
+	perceptron PREDICTOR (
 		.clk, .rst_n,
 
 		.i_req_valid     (request_prediction),
@@ -208,3 +208,75 @@ module branch_predictor_2bit (
 	end
 
 endmodule
+
+module perceptron (
+	input clk,    // Clock
+	input rst_n,  // Synchronous reset active low
+
+	// Request
+	input logic i_req_valid,
+	input logic [`ADDR_WIDTH - 1 : 0] i_req_pc,
+	input logic [`ADDR_WIDTH - 1 : 0] i_req_target,
+	output mips_core_pkg::BranchOutcome o_req_prediction,
+
+	// Feedback
+	input logic i_fb_valid,
+	input logic [`ADDR_WIDTH - 1 : 0] i_fb_pc,
+	input mips_core_pkg::BranchOutcome i_fb_prediction,
+	input mips_core_pkg::BranchOutcome i_fb_outcome
+);
+	// Initialize
+	parameter N = 8;
+	parameter W_BITS = 4;
+	parameter P_BITS = 4;		// Number of bits for perceptrons
+	
+	logic[W_BITS+N-1:0] theta = 512;	// Threshold for training
+
+	logic [N-1:0] x;
+	logic [P_BITS-1:0][N-1:0] w;
+	logic signed [P_BITS-1:0][N + W_BITS - 1:0] stored_y;
+
+	// Global History
+	always_ff @(posedge clk) begin
+		if (i_fb_valid) begin
+			x = x << 1;
+			x[0] = 1'b1;
+			x[1] = i_fb_outcome;
+		end
+	end
+
+	// Prediction
+	logic [P_BITS-1:0] r_hash = i_req_pc[P_BITS-1:0];
+	logic signed [W_BITS + N:0] y = 0;
+	always_ff @(clk) begin
+		y = y + w[r_hash][0];
+		for (int i = 1; i < N; i++) begin
+			y = y + (2*x[i]-1) * w[r_hash][i];
+		end
+		stored_y[r_hash] = y;
+	end
+
+	// Training
+	logic [P_BITS-1:0] fb_hash = i_fb_pc[P_BITS-1:0];
+	always_ff @(posedge clk) begin
+		if (i_fb_valid) begin
+			if ((i_fb_prediction | i_fb_outcome) | stored_y[fb_hash] < theta)  begin
+				for (int i = 0; i < N; i++) begin
+					w[fb_hash][i] = w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
+				end
+			end
+		end
+	end
+
+	always_comb
+	begin
+		o_req_prediction = y[N-1] ? NOT_TAKEN : TAKEN;
+	end
+
+endmodule
+
+// TODO:
+// - Negative numbers are actually negative
+// - Training is completed?
+// - Check if values are getting updated correctly
+// - Multiple perceptrons are owrking right (hash)
