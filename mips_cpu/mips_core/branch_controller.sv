@@ -227,7 +227,7 @@ module perceptron (
 );
 	parameter N = 32;										// Number of Bits for GHR
 	parameter W_BITS = 7;									// Number of Bits for weight
-	parameter P_BITS = 8;									// Number of perceptrons
+	parameter P_BITS = 4;//8;									// Number of perceptrons
 
 	logic [W_BITS+N-1:0] theta;								// Threshold for training
 	logic [N-1:0] x;										// Global History Register  
@@ -235,7 +235,8 @@ module perceptron (
 	logic signed [N + W_BITS - 1:0] stored_y [P_BITS-1:0]; 	// Stored Y values
 	/*For prediction */
 	logic [P_BITS-1:0] r_hash;								// Req PC hashed				
-	logic signed [W_BITS + N:0] y;							// Calculated Y based on Req PC
+	logic signed [W_BITS + N - 1:0] y;						// Calculated Y based on Req PC
+	logic signed [W_BITS + N - 1:0] y_abs;
 	/*For training*/
 	logic [P_BITS-1:0] fb_hash;								// FB PC hashed
 
@@ -243,10 +244,20 @@ module perceptron (
 	assign r_hash = i_req_pc[P_BITS-1:0];
 	assign fb_hash = i_fb_pc[P_BITS-1:0];
 
+	always_comb begin
+		if (stored_y[fb_hash] < 0) begin
+			y_abs = -1*stored_y[fb_hash];
+		end
+		else begin
+			y_abs = stored_y[fb_hash];
+		end
+	end
+
+
 	//Initial values for simulation
 	initial begin
-		theta = 75;
-		x = '0;
+		theta = 150;
+		x = 1;										// change2: Last bit of perceptron should always be 1
 		for(int i = 0; i < P_BITS; i++) begin
 			for(int j = 0; j < N; j++) begin
 				w[i][j] <= '0;
@@ -255,25 +266,30 @@ module perceptron (
 	end
 
 	//Shift GHR
-	always @(i_fb_valid) begin
+	always_ff @(posedge clk) begin					// same miss rate as: always @(i_fb_valid) begin
 		if(i_fb_valid) begin
-			x = {x[N-2:0], i_fb_outcome};
+			x = {x[N-2:1], i_fb_outcome, 1'b1};		// change2: Last bit of perceptron should always be 1
 		end
 	end
 
 	//Train
 	always_ff @(posedge clk) begin	
 		if (i_fb_valid) begin 
-			if (i_fb_prediction != i_fb_outcome | $unsigned(stored_y[fb_hash]) <= theta) begin
+			// $display("y: ", y_abs, " , correct: ", i_fb_prediction == i_fb_outcome);
+			if (i_fb_prediction != i_fb_outcome | y_abs <= theta) begin			// @unsigned(stored_y[fb_hash]) gave incorrect values
 				for (int i = 0; i < N; i++) begin
 					w[fb_hash][i] <= w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
 				end
+
+				// $display("train");
 			end
+			// else $display("untrain");
 		end
 	end
 
 	//Predictions - updates value of y triggered by whenever r_hash changes
 	always @(r_hash) begin
+	// always_ff @(posedge clk) begin		// this has higher miss for some reason?
 		if(i_req_valid) begin
 			y = w[r_hash][0];
 			for (int i = 1; i < N; i++) begin
