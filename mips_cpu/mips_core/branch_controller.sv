@@ -225,58 +225,72 @@ module perceptron (
 	input mips_core_pkg::BranchOutcome i_fb_prediction,
 	input mips_core_pkg::BranchOutcome i_fb_outcome
 );
-	// Initialize
-	parameter N = 8;
-	parameter W_BITS = 4;
-	parameter P_BITS = 4;		// Number of bits for perceptrons
-	
-	logic[W_BITS+N-1:0] theta = 512;	// Threshold for training
+	parameter N = 32;										// Number of Bits for GHR
+	parameter W_BITS = 7;									// Number of Bits for weight
+	parameter P_BITS = 8;									// Number of perceptrons
 
-	logic [N-1:0] x;
-	logic [P_BITS-1:0][N-1:0] w;
-	logic signed [P_BITS-1:0][N + W_BITS - 1:0] stored_y;
+	logic [W_BITS+N-1:0] theta;								// Threshold for training
+	logic [N-1:0] x;										// Global History Register  
+	logic signed [W_BITS-1:0] w [P_BITS-1:0][N-1:0];		// PxN array of weights		(Changed to signed)
+	logic signed [N + W_BITS - 1:0] stored_y [P_BITS-1:0]; 	// Stored Y values
+	/*For prediction */
+	logic [P_BITS-1:0] r_hash;								// Req PC hashed				
+	logic signed [W_BITS + N:0] y;							// Calculated Y based on Req PC
+	/*For training*/
+	logic [P_BITS-1:0] fb_hash;								// FB PC hashed
 
-	// Global History
-	always_ff @(posedge clk) begin
-		if (i_fb_valid) begin
-			x = x << 1;
-			x[0] = 1'b1;
-			x[1] = i_fb_outcome;
+
+	assign r_hash = i_req_pc[P_BITS-1:0];
+	assign fb_hash = i_fb_pc[P_BITS-1:0];
+
+	//Initial values for simulation
+	initial begin
+		theta = 75;
+		x = '0;
+		for(int i = 0; i < P_BITS; i++) begin
+			for(int j = 0; j < N; j++) begin
+				w[i][j] <= '0;
+			end
 		end
 	end
 
-	// Prediction
-	logic [P_BITS-1:0] r_hash = i_req_pc[P_BITS-1:0];
-	logic signed [W_BITS + N:0] y = 0;
-	always_ff @(clk) begin
-		y = y + w[r_hash][0];
-		for (int i = 1; i < N; i++) begin
-			y = y + (2*x[i]-1) * w[r_hash][i];
+	//Shift GHR
+	always @(i_fb_valid) begin
+		if(i_fb_valid) begin
+			x = {x[N-2:0], i_fb_outcome};
 		end
-		stored_y[r_hash] = y;
 	end
 
-	// Training
-	logic [P_BITS-1:0] fb_hash = i_fb_pc[P_BITS-1:0];
-	always_ff @(posedge clk) begin
-		if (i_fb_valid) begin
-			if ((i_fb_prediction | i_fb_outcome) | stored_y[fb_hash] < theta)  begin
+	//Train
+	always_ff @(posedge clk) begin	
+		if (i_fb_valid) begin 
+			if (i_fb_prediction != i_fb_outcome | $unsigned(stored_y[fb_hash]) <= theta) begin
 				for (int i = 0; i < N; i++) begin
-					w[fb_hash][i] = w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
+					w[fb_hash][i] <= w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
 				end
 			end
 		end
 	end
 
-	always_comb
-	begin
-		o_req_prediction = y[N-1] ? NOT_TAKEN : TAKEN;
+	//Predictions - updates value of y triggered by whenever r_hash changes
+	always @(r_hash) begin
+		if(i_req_valid) begin
+			y = w[r_hash][0];
+			for (int i = 1; i < N; i++) begin
+				y = y + (2*x[i]-1) * w[r_hash][i];
+			end
+			stored_y[r_hash] = y;
+		end	
+	end
+	
+	always_comb begin //Changed from y to stored_y
+		o_req_prediction = stored_y[r_hash][N-1] ? NOT_TAKEN : TAKEN;		 
 	end
 
 endmodule
 
 // TODO:
 // - Negative numbers are actually negative
-// - Training is completed?
+// - Training is completed? 
 // - Check if values are getting updated correctly
-// - Multiple perceptrons are owrking right (hash)
+// - Multiple perceptrons are owrking right (hash) 
