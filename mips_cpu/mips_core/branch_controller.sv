@@ -241,11 +241,8 @@ module perceptron (
 	/*For training*/
 	logic [P_BITS-1:0] fb_hash;								// FB PC hashed
 
-	logic [`ADDR_WIDTH - 1 : 0] counter [P_NUM:0];
+	// logic [`ADDR_WIDTH - 1 : 0] counter [P_NUM:0];
 	logic [N-1:0] stored_x;
-
-	// assign r_hash = i_req_pc[`ADDR_WIDTH - 1:2] % P_NUM;
-	// assign fb_hash = i_fb_pc[`ADDR_WIDTH - 1:2] % P_NUM;
 
 	assign r_hash = (i_req_pc[`ADDR_WIDTH - 1:2] ^ x) % P_NUM;
 	assign fb_hash = (i_fb_pc[`ADDR_WIDTH - 1:2] ^ stored_x) % P_NUM;
@@ -263,44 +260,37 @@ module perceptron (
 	//Initial values for simulation
 	initial begin
 		theta = 27;
-		x = 1;										// change2: Last bit of perceptron should always be 1
+		x = 1;
 		for(int i = 0; i < P_NUM; i++) begin
 			for(int j = 0; j < N; j++) begin
 				w[i][j] <= '0;
-				// w[i][j] <= {$random} % 128 - 64;
 			end
-			counter[i] = 0;
+			// counter[i] = 0;
 		end
 	end
 
 	//Shift GHR
-	always @(i_fb_valid) begin					// same miss rate as: always @(i_fb_valid) begin
+	always @(i_fb_valid) begin
 		if(i_fb_valid) begin
 			stored_x <= x;
-			x <= {x[N-2:1], i_fb_outcome, 1'b1};		// change2: Last bit of perceptron should always be 1
+			x <= {x[N-2:1], i_fb_outcome, 1'b1};
 		end
 	end
 
 	//Train
 	always_ff @(posedge clk) begin	
 		if (i_fb_valid) begin
-			// $display("i_fb_pc[`ADDR_WIDTH - 1:2]: %b",i_fb_pc[`ADDR_WIDTH - 1:2]);
-			if (i_fb_prediction != i_fb_outcome | y_abs <= theta) begin			// @unsigned(stored_y[fb_hash]) gave incorrect values
-				// $display("w[fb_hash][0]:", w[fb_hash][0], " fb: : ", (2*i_fb_outcome-1), " x[0]: ", (2*x[0]-1));
-				counter[fb_hash] <= counter[fb_hash] + 1;
+			if (i_fb_prediction != i_fb_outcome | y_abs <= theta) begin
+				// counter[fb_hash] <= counter[fb_hash] + 1;
 				for (int i = 0; i < N; i++) begin
 					w[fb_hash][i] <= w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
 				end
-				// $display("w[fb_hash][0]:", w[fb_hash][0], "outcome: ", (2*i_fb_outcome-1) * (2*x[0]-1));
-				// $display("train");
 			end
-			// else $display("untrain");
 		end
 	end
 
 	//Predictions - updates value of y triggered by whenever r_hash changes
 	always @(r_hash) begin
-	// always_ff @(posedge clk) begin		// this has higher miss for some reason?
 		if(i_req_valid) begin
 			y = w[r_hash][0];
 			for (int i = 1; i < N; i++) begin
@@ -310,15 +300,15 @@ module perceptron (
 		end	
 	end
 	
-	always_comb begin //Changed from y to stored_y
+	always_comb begin
 		o_req_prediction = stored_y[r_hash][N-1] ? NOT_TAKEN : TAKEN;		 
 	end
 
-	final begin
-		for (int i = 0; i < P_NUM; i++) begin
-			$display(i, " ", counter[i]);
-		end
-	end
+	// final begin
+	// 	for (int i = 0; i < P_NUM; i++) begin
+	// 		$display(i, " ", counter[i]);
+	// 	end
+	// end
 
 endmodule
 
