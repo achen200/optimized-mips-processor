@@ -227,12 +227,13 @@ module perceptron (
 );
 	parameter N = 32;										// Number of Bits for GHR
 	parameter W_BITS = 7;									// Number of Bits for weight
-	parameter P_BITS = 4;//8;									// Number of perceptrons
+	parameter P_BITS = 8;									// Number of bits for perceptron
+	parameter P_NUM = 128;									// Number of perceptrons
 
 	logic [W_BITS+N-1:0] theta;								// Threshold for training
 	logic [N-1:0] x;										// Global History Register  
-	logic signed [W_BITS-1:0] w [P_BITS-1:0][N-1:0];		// PxN array of weights		(Changed to signed)
-	logic signed [N + W_BITS - 1:0] stored_y [P_BITS-1:0]; 	// Stored Y values
+	logic signed [W_BITS-1:0] w [P_NUM-1:0][N-1:0];		// PxN array of weights		(Changed to signed)
+	logic signed [N + W_BITS - 1:0] stored_y [P_NUM-1:0]; 	// Stored Y values
 	/*For prediction */
 	logic [P_BITS-1:0] r_hash;								// Req PC hashed				
 	logic signed [W_BITS + N - 1:0] y;						// Calculated Y based on Req PC
@@ -240,9 +241,8 @@ module perceptron (
 	/*For training*/
 	logic [P_BITS-1:0] fb_hash;								// FB PC hashed
 
-
-	assign r_hash = i_req_pc[P_BITS-1:0];
-	assign fb_hash = i_fb_pc[P_BITS-1:0];
+	assign r_hash = i_req_pc[`ADDR_WIDTH - 1:2] % P_NUM;
+	assign fb_hash = i_fb_pc[`ADDR_WIDTH - 1:2] % P_NUM;
 
 	always_comb begin
 		if (stored_y[fb_hash] < 0) begin
@@ -256,31 +256,34 @@ module perceptron (
 
 	//Initial values for simulation
 	initial begin
-		theta = 150;
+		theta = 75;
 		x = 1;										// change2: Last bit of perceptron should always be 1
-		for(int i = 0; i < P_BITS; i++) begin
+		for(int i = 0; i < P_NUM; i++) begin
 			for(int j = 0; j < N; j++) begin
 				w[i][j] <= '0;
+				// w[i][j] <= {$random} % 128;
 			end
 		end
 	end
 
 	//Shift GHR
-	always_ff @(posedge clk) begin					// same miss rate as: always @(i_fb_valid) begin
+	always @(i_fb_valid) begin					// same miss rate as: always @(i_fb_valid) begin
 		if(i_fb_valid) begin
-			x = {x[N-2:1], i_fb_outcome, 1'b1};		// change2: Last bit of perceptron should always be 1
+			x <= {x[N-2:1], i_fb_outcome, 1'b1};		// change2: Last bit of perceptron should always be 1
 		end
 	end
 
 	//Train
 	always_ff @(posedge clk) begin	
-		if (i_fb_valid) begin 
-			// $display("y: ", y_abs, " , correct: ", i_fb_prediction == i_fb_outcome);
+		if (i_fb_valid) begin
+			// $display("i_fb_pc[`ADDR_WIDTH - 1:2]: %b",i_fb_pc[`ADDR_WIDTH - 1:2]);
+			// $display("y_abs: ", y_abs, " fb_hash: ", fb_hash);
 			if (i_fb_prediction != i_fb_outcome | y_abs <= theta) begin			// @unsigned(stored_y[fb_hash]) gave incorrect values
+				// $display("w[fb_hash][0]:", w[fb_hash][0], " fb: : ", (2*i_fb_outcome-1), " x[0]: ", (2*x[0]-1));
 				for (int i = 0; i < N; i++) begin
-					w[fb_hash][i] <= w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
+					w[fb_hash][i] = w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
 				end
-
+				// $display("w[fb_hash][0]:", w[fb_hash][0], "outcome: ", (2*i_fb_outcome-1) * (2*x[0]-1));
 				// $display("train");
 			end
 			// else $display("untrain");
@@ -309,4 +312,5 @@ endmodule
 // - Negative numbers are actually negative
 // - Training is completed? 
 // - Check if values are getting updated correctly
-// - Multiple perceptrons are owrking right (hash) 
+// - Multiple perceptrons are owrking right (hash)
+// use most sig bit for hash
