@@ -225,10 +225,10 @@ module perceptron (
 	input mips_core_pkg::BranchOutcome i_fb_prediction,
 	input mips_core_pkg::BranchOutcome i_fb_outcome
 );
-	parameter N = 32;										// Number of Bits for GHR
-	parameter W_BITS = 7;									// Number of Bits for weight
+	parameter N = 7;										// Number of Bits for GHR
+	parameter W_BITS = 6;									// Number of Bits for weight
 	parameter P_BITS = 8;									// Number of bits for perceptron
-	parameter P_NUM = 128;									// Number of perceptrons
+	parameter P_NUM = 256;									// Number of perceptrons
 
 	logic [W_BITS+N-1:0] theta;								// Threshold for training
 	logic [N-1:0] x;										// Global History Register  
@@ -262,12 +262,12 @@ module perceptron (
 
 	//Initial values for simulation
 	initial begin
-		theta = 75;
+		theta = 27;
 		x = 1;										// change2: Last bit of perceptron should always be 1
 		for(int i = 0; i < P_NUM; i++) begin
 			for(int j = 0; j < N; j++) begin
 				w[i][j] <= '0;
-				// w[i][j] <= {$random} % 128;
+				// w[i][j] <= {$random} % 128 - 64;
 			end
 			counter[i] = 0;
 		end
@@ -285,7 +285,6 @@ module perceptron (
 	always_ff @(posedge clk) begin	
 		if (i_fb_valid) begin
 			// $display("i_fb_pc[`ADDR_WIDTH - 1:2]: %b",i_fb_pc[`ADDR_WIDTH - 1:2]);
-			// $display("y_abs: ", y_abs, " fb_hash: ", fb_hash);
 			if (i_fb_prediction != i_fb_outcome | y_abs <= theta) begin			// @unsigned(stored_y[fb_hash]) gave incorrect values
 				// $display("w[fb_hash][0]:", w[fb_hash][0], " fb: : ", (2*i_fb_outcome-1), " x[0]: ", (2*x[0]-1));
 				counter[fb_hash] <= counter[fb_hash] + 1;
