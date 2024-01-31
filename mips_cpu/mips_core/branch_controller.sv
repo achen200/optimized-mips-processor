@@ -241,8 +241,14 @@ module perceptron (
 	/*For training*/
 	logic [P_BITS-1:0] fb_hash;								// FB PC hashed
 
-	assign r_hash = i_req_pc[`ADDR_WIDTH - 1:2] % P_NUM;
-	assign fb_hash = i_fb_pc[`ADDR_WIDTH - 1:2] % P_NUM;
+	logic [`ADDR_WIDTH - 1 : 0] counter [P_NUM:0];
+	logic [N-1:0] stored_x;
+
+	// assign r_hash = i_req_pc[`ADDR_WIDTH - 1:2] % P_NUM;
+	// assign fb_hash = i_fb_pc[`ADDR_WIDTH - 1:2] % P_NUM;
+
+	assign r_hash = (i_req_pc[`ADDR_WIDTH - 1:2] ^ x) % P_NUM;
+	assign fb_hash = (i_fb_pc[`ADDR_WIDTH - 1:2] ^ stored_x) % P_NUM;
 
 	always_comb begin
 		if (stored_y[fb_hash] < 0) begin
@@ -263,12 +269,14 @@ module perceptron (
 				w[i][j] <= '0;
 				// w[i][j] <= {$random} % 128;
 			end
+			counter[i] = 0;
 		end
 	end
 
 	//Shift GHR
 	always @(i_fb_valid) begin					// same miss rate as: always @(i_fb_valid) begin
 		if(i_fb_valid) begin
+			stored_x <= x;
 			x <= {x[N-2:1], i_fb_outcome, 1'b1};		// change2: Last bit of perceptron should always be 1
 		end
 	end
@@ -280,8 +288,9 @@ module perceptron (
 			// $display("y_abs: ", y_abs, " fb_hash: ", fb_hash);
 			if (i_fb_prediction != i_fb_outcome | y_abs <= theta) begin			// @unsigned(stored_y[fb_hash]) gave incorrect values
 				// $display("w[fb_hash][0]:", w[fb_hash][0], " fb: : ", (2*i_fb_outcome-1), " x[0]: ", (2*x[0]-1));
+				counter[fb_hash] <= counter[fb_hash] + 1;
 				for (int i = 0; i < N; i++) begin
-					w[fb_hash][i] = w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
+					w[fb_hash][i] <= w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
 				end
 				// $display("w[fb_hash][0]:", w[fb_hash][0], "outcome: ", (2*i_fb_outcome-1) * (2*x[0]-1));
 				// $display("train");
@@ -304,6 +313,12 @@ module perceptron (
 	
 	always_comb begin //Changed from y to stored_y
 		o_req_prediction = stored_y[r_hash][N-1] ? NOT_TAKEN : TAKEN;		 
+	end
+
+	final begin
+		for (int i = 0; i < P_NUM; i++) begin
+			$display(i, " ", counter[i]);
+		end
 	end
 
 endmodule
