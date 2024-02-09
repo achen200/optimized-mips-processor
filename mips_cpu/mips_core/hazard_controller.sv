@@ -40,7 +40,10 @@ module hazard_controller (
 	hazard_control_ifc.out m2w_hc,
 
 	// Load pc output
-	load_pc_ifc.out load_pc
+	load_pc_ifc.out load_pc,
+
+	// Output i cache miss
+	output inc_ic_amiss
 );
 
 	branch_controller BRANCH_CONTROLLER (
@@ -61,7 +64,7 @@ module hazard_controller (
 
 
 	logic prev_ic_miss;  	// Prev value of I-cache miss
-	logic inc_ic_amiss;		// Increment I-cache access miss counter
+	// logic inc_ic_amiss;		// Increment I-cache access miss counter
 	logic prev_dc_miss;		// Prev value of D-cache miss
 	logic inc_dc_amiss;		// Increment D-cache access miss counter
 
