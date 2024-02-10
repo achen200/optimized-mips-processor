@@ -155,9 +155,11 @@ module mips_core (
 		.i_pc_current (if_pc_current),
 		.i_pc_next    (if_pc_next),
 
+		.ic_out (if_i_cache_output),
+
 		.i_cache_miss(ic_miss),
 
-		.out          (sb_output),
+		.sb_out          (sb_output),
 
 		.mem_read_address(mem_read_address[2]),
 		.mem_read_data   (mem_read_data[2])
@@ -177,7 +179,7 @@ module mips_core (
 		.i_hc(i2d_hc),
 
 		.i_pc   (if_pc_current),     .o_pc   (i2d_pc),
-		.i_inst (if_i_cache_output), .o_inst (i2d_inst)
+		.i_inst (sb_output), .o_inst (i2d_inst)
 	);
 
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -321,7 +323,7 @@ module mips_core (
 	hazard_controller HAZARD_CONTROLLER (
 		.clk, .rst_n,
 
-		.if_i_cache_output,
+		.if_i_cache_output(sb_output),
 		.dec_pc(i2d_pc),
 		.dec_branch_decoded,
 		.ex_pc(d2e_pc),
