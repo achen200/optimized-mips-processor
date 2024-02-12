@@ -39,6 +39,7 @@ module i_stream_buffer #(
 
     logic [DATA_WIDTH-1:0] data_table [BUF_DEPTH-1:0];
     logic [`ADDR_WIDTH-1:0] pc_table [BUF_DEPTH-1:0];
+	logic empty_table [BUF_DEPTH-1:0];
 
     // Output of SB 1
     logic intermediate1_valid;	// Output Valid
@@ -51,6 +52,7 @@ module i_stream_buffer #(
         for (int i = 0; i < BUF_DEPTH; i++) begin
             pc_table[i] = '0;
             data_table[i] = '0;
+			empty_table[i] = 1'b0;
         end
     end 
 
@@ -78,12 +80,12 @@ module i_stream_buffer #(
 			logic int_valid = 1'b0;
 
 			for(int i = 0; i < BUF_DEPTH; i++) begin
-				if (pc_table[i] == 0 && data_table[i] == 0 && first_empty == -1) begin
+				if (empty_table[i] == 0 && first_empty == -1) begin
 					first_empty = i;
 				end
 
 				//If we find PC that we're looking for (exception at pc_table[i] == 0)
-				if (pc_table[i] != 0 && pc_table[i] == i_pc_current.pc) begin
+				if (empty_table[i] != 0 && pc_table[i] == i_pc_current.pc) begin
 					$display("Found cached miss");
 					intermediate1_data = data_table[i];
                 	intermediate1_valid = 1'b1;
@@ -98,9 +100,10 @@ module i_stream_buffer #(
 			end
 			//If table not fully populated
 			if(first_empty != -1 && int_valid == 0)begin
-				$display("Populating Table");
+				//$display("Populating Table: %d", first_empty);
 				data_table[first_empty] = mem_read_data.RDATA;
 				pc_table[first_empty] = i_pc_current.pc;
+				empty_table[first_empty] = 1'b1;
 			end
 			//Else overwrite LRU entry
 			else if (first_empty == -1 && int_valid == 0)begin
