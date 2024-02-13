@@ -226,6 +226,7 @@ module i_cache #(
 				begin
 					if (mem_read_data.RVALID)
 					begin
+						$display("Valid cache pc %h mem_addr %h data %h", i_pc_current.pc, mem_read_address.ARADDR, mem_read_data.RDATA);
 						databank_select <= {databank_select[LINE_SIZE - 2 : 0],
 							databank_select[LINE_SIZE - 1]};
 						valid_bits[r_index] <= last_refill_word;

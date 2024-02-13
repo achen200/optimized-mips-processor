@@ -100,6 +100,12 @@ module i_stream_buffer #(
 				end
 				STATE_REFILL_DATA:
 				begin
+					if(w_e) begin
+						$display("state %d, wrote to %h pc %h value %h", state, waddr, r_pc, wdata);
+						pc_table[waddr] <= r_pc;
+						data_table[waddr] <= wdata;
+						empty_table[waddr] <= 1'b1;
+					end
 				end
 			endcase
 		end
@@ -116,7 +122,7 @@ module i_stream_buffer #(
 				if (mem_read_address.ARREADY)
 					next_state = STATE_REFILL_DATA;
 			STATE_REFILL_DATA:
-				if (mem_read_data.RVALID)
+				if (mem_read_data.RVALID) //Need last_refill_word here
 					next_state = STATE_READY;
 		endcase
 	end
@@ -135,10 +141,7 @@ module i_stream_buffer #(
 	//Writing to buffer
 	always_ff @(posedge clk) begin
 		if(w_e) begin
-			$display("state %d, wrote to %h pc %h value %h", state, waddr, r_pc, wdata);
-			pc_table[waddr] <= r_pc;
-			data_table[waddr] <= wdata;
-			empty_table[waddr] <= 1'b1;
+			
 		end
 		// else begin
 		// 	$display("state: %d, icache valid?%d pc %h value %h", state, ic_out.valid, i_pc_current.pc, ic_out.data);
