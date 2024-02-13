@@ -123,7 +123,6 @@ module i_cache #(
 		.i_wdata (tagbank_wdata),
 		.i_waddr (tagbank_waddr),
 		.i_raddr (tagbank_raddr),
-
 		.o_rdata (tagbank_rdata)
 	);
 

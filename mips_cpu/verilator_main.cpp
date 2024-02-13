@@ -324,16 +324,16 @@ int main(int argc, char **argv)
 
 	std::cout << "\n====== Custom Stats ====\n";
 	//std::cout << "I-cache Access: " << instruction_count << std::endl;
-	//std::cout << "I-cache Misses: " << stats["ic_miss_access"] << std::endl;
-	std::cout << "I-cache Miss Rate: " << (float)stats["ic_miss_access"]/instruction_count << std::endl;
+	//std::cout << "I-cache Misses: " << stats["ic_misses"] << std::endl;
+	std::cout << "I-cache Miss Rate: " << (float)stats["ic_misses"]/instruction_count << std::endl;
 	//std::cout << "D-cache Access: " <<  load_store_count << std::endl;
-	//std::cout << "D-cache Misses: " << stats["dc_miss_access"] << std::endl;
-	std::cout << "D-cache Miss Rate: " << (float)stats["dc_miss_access"]/load_store_count << std::endl;
+	//std::cout << "D-cache Misses: " << stats["dc_misses"] << std::endl;
+	std::cout << "D-cache Miss Rate: " << (float)stats["dc_misses"]/load_store_count << std::endl;
 	
 
 	//std::cout << "\nTotal Cache Accesses: " <<  instruction_count + load_store_count << std::endl;
-	//std::cout << "Total Cache Misses: " << stats["ic_miss_access"] + stats["dc_miss_access"] << std::endl;
-	std::cout << "Combined Cache Miss Rate: " <<  ((float) stats["ic_miss_access"] + (float) stats["dc_miss_access"])/
+	//std::cout << "Total Cache Misses: " << stats["ic_misses"] + stats["dc_misses"] << std::endl;
+	std::cout << "Combined Cache Miss Rate: " <<  ((float) stats["ic_misses"] + (float) stats["dc_misses"])/
 											(instruction_count + load_store_count) << std::endl;
 	std::cout << "Branches Predictions: " << stats["branch_pred"] << std::endl;
 	std::cout << "Branch Misses: " << stats["branch_miss"] << std::endl;

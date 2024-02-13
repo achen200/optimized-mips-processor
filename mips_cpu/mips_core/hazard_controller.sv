@@ -62,19 +62,12 @@ module hazard_controller (
 	//    lw_hazard;		// Load word hazard (input from forward unit)
 	logic dc_miss;			// D cache miss
 
-
-	logic prev_ic_miss;  	// Prev value of I-cache miss
-	// logic inc_ic_amiss;		// Increment I-cache access miss counter
-	logic prev_dc_miss;		// Prev value of D-cache miss
-	logic inc_dc_amiss;		// Increment D-cache access miss counter
-
 	logic branch_miss;
 	logic branch_hit;
 
 	// Determine if we have these hazards
 	always_comb
 	begin
-		prev_ic_miss = ic_miss;
 		ic_miss = ~if_i_cache_output.valid;
 		ds_miss = ic_miss & dec_branch_decoded.valid;
 		dec_overload = dec_branch_decoded.valid
@@ -84,18 +77,7 @@ module hazard_controller (
 			& (ex_branch_result.prediction != ex_branch_result.outcome);
 
 		// lw_hazard is determined by forward unit.
-		prev_dc_miss = dc_miss;
 		dc_miss = ~mem_done;
-
-		if(ic_miss & ~prev_ic_miss) 
-		begin
-			inc_ic_amiss = 1'b1;
-		end
-
-		if(dc_miss & ~prev_dc_miss)
-		begin
-			inc_dc_amiss = 1'b1;
-		end
 	end
 
 	// Control signals
@@ -205,24 +187,24 @@ module hazard_controller (
 	end
 
 `ifdef SIMULATION
+	always_ff @(ic_miss) begin
+		if(ic_miss) begin 
+			stats_event("ic_misses");
+			inc_ic_amiss = 1'b1;
+		end
+	end
+	always_ff @(dc_miss) begin
+		if(dc_miss) stats_event("dc_misses");
+	end
 	always_ff @(posedge clk)
 	begin
-		if (inc_ic_amiss) 
-		begin
-			stats_event("ic_miss_access");
-			inc_ic_amiss = 1'b0;
-		end
-		if (inc_dc_amiss)
-		begin
-			stats_event("dc_miss_access");
-			inc_dc_amiss = 1'b0;
-		end
-		if (ic_miss) stats_event("ic_miss");
+		if (inc_ic_amiss) inc_ic_amiss = 1'b0;
+		if (ic_miss) stats_event("ic_miss_cycles");
 		if (ds_miss) stats_event("ds_miss");
 		if (dec_overload) stats_event("dec_overload");
 		if (ex_overload) stats_event("ex_overload");
 		if (lw_hazard) stats_event("lw_hazard");
-		if (dc_miss) stats_event("dc_miss");
+		if (dc_miss) stats_event("dc_miss_cycles");
 		if (if_stall) stats_event("if_stall");
 		if (if_flush) stats_event("if_flush");
 		if (dec_stall) stats_event("dec_stall");

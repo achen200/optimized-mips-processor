@@ -157,7 +157,7 @@ module mips_core (
 
 		.ic_out (if_i_cache_output),
 
-		.i_cache_miss(ic_miss),
+		.ic_miss(ic_miss),
 
 		.sb_out          (sb_output),
 
@@ -406,6 +406,7 @@ module mips_core (
 
 		if (m2w_write_back.uses_rw)
 		begin
+			//$display("wb addr: %h wb data: %h", m2w_write_back.rw_addr, m2w_write_back.rw_data);
 			wb_event(m2w_write_back.rw_addr, m2w_write_back.rw_data);
 		end
 
@@ -413,10 +414,15 @@ module mips_core (
 			&& !m2w_hc.flush
 			&& mem_d_cache_output.valid)
 		begin
-			if (e2m_d_cache_input.mem_action == READ)
+			if (e2m_d_cache_input.mem_action == READ)begin
+				//$display("input addr: %d read data: %d ",  e2m_d_cache_input.addr,  mem_d_cache_output.data);
 				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, mem_d_cache_output.data);
-			else
+			end
+			else begin
+				//$display("d_cache write");
+				//$display("input addr: %d input data: %d ",  e2m_d_cache_input.addr,  e2m_d_cache_input.data);
 				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, e2m_d_cache_input.data);
+			end
 		end
 	end
 `endif
