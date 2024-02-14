@@ -9,20 +9,14 @@ module i_stream_buffer #(
     // General signals
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
-	output sbuf_hit,
 
-    // Request
+	// Request
 	pc_ifc.in i_pc_current,
 	pc_ifc.in i_pc_next,
 
     // I cache Output
     cache_output_ifc.in ic_out,
-
-    // From hazard controller
-    input ic_miss,
-
-    // Response
-	cache_output_ifc.out sb_out,
+	cache_output_ifc.out sb_out, // Response
 
     // Memory interface
 	axi_read_address.master mem_read_address,
@@ -70,14 +64,12 @@ module i_stream_buffer #(
 	logic [LINE_SIZE-1:0] ctr, next_ctr; //Counters to stall
 	
 	assign {i_tag, i_index, i_block_offset} = i_pc_current.pc[`ADDR_WIDTH - 1 : 2];				
-	assign {i_tag_next, i_index_next, i_block_offset_next} = i_pc_next.pc[`ADDR_WIDTH - 1 : 2]; //Read information
 	assign {n_tag, n_index} = {i_tag, i_index} + 1'b1; 		//Write information
 	assign raddr = {i_tag, i_index} % BUF_DEPTH;
-	assign raddr_n = {i_tag_next, i_index_next} % BUF_DEPTH;
-	assign sbuf_hit = hit;
-
 
 	logic hit, miss;
+
+	//State variables
 	always_comb begin
 		hit = valid_bits[raddr] 
 			& ({i_tag, i_index} == pc_table[raddr]) 
@@ -109,7 +101,7 @@ module i_stream_buffer #(
 				STATE_READY:
 				begin
 					if(~ic_out.valid && miss) begin //~ic_out.valid
-						$display("STREAM READY MISS: pc_top %h ", {i_tag, i_index});
+						//$display("STREAM READY MISS: pc_top %h ", {i_tag, i_index});
 						r_tag <= n_tag;
 						r_index <= n_index;
 					end
@@ -117,12 +109,12 @@ module i_stream_buffer #(
 				STATE_REFILL_REQUEST:
 				begin
 					ctr <= 0;
-					$display("STREAM REFILL REQ:");
+					//$display("STREAM REFILL REQ:");
 				end
 				STATE_REFILL_DATA:
 				begin
 					if(mem_read_data.RVALID) begin
-						$display("STREAM REFILL_DATA: pc %h stored_pc %h memaddr %h value %h last_word %h", {n_tag, n_index}, {r_tag, r_index}, mem_read_address.ARADDR, wdata, last_refill_word); // wrote to %h, waddr
+						//$display("STREAM REFILL_DATA: pc %h stored_pc %h memaddr %h value %h last_word %h", {n_tag, n_index}, {r_tag, r_index}, mem_read_address.ARADDR, wdata, last_refill_word); // wrote to %h, waddr
 						pc_table[waddr] <= {r_tag, r_index};
 						data_table[waddr][ctr] <= wdata;
 						valid_bits[waddr] <= last_refill_word;
@@ -138,7 +130,7 @@ module i_stream_buffer #(
 		next_state = state;
 		unique case(state)
 			STATE_READY:
-				if (~ic_out.valid && miss) //~ic_out.valid
+				if (~ic_out.valid && miss) 
 				begin
 					next_state = STATE_REFILL_REQUEST;
 				end
@@ -157,19 +149,7 @@ module i_stream_buffer #(
 		waddr = ({r_tag, r_index})%BUF_DEPTH; //change waddr width to match modulus
 	end
 
-	//Reading from buffer
-	// always_ff @(posedge clk) begin
-	// 	if(ic_out.valid) 
-	// 		int_valid <= 1'b0;
-	// 	else begin
-	// 		if(hit && ~ic_out.valid) begin //if in table and cache missed
-	// 			$display("READ FROM TABLE: STATE %h curr_pc %h stored_pc %h data_table[%h][%h]: %h", state, i_pc_current.pc, pc_table[raddr], raddr, i_block_offset, data_table[raddr][i_block_offset]);
-	// 			int_valid <= 1'b1;
-	// 			int_data <= data_table[raddr][i_block_offset];
-	// 		end
-	// 		else int_valid <= 1'b0;
-	// 	end
-	// end
+	//Buffer Read
 	always_comb begin
 		if(ic_out.valid)
 			int_valid = 1'b0;

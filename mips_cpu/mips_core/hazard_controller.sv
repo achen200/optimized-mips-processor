@@ -40,10 +40,7 @@ module hazard_controller (
 	hazard_control_ifc.out m2w_hc,
 
 	// Load pc output
-	load_pc_ifc.out load_pc,
-
-	// Output i cache miss
-	output inc_ic_amiss
+	load_pc_ifc.out load_pc
 );
 
 	branch_controller BRANCH_CONTROLLER (
@@ -61,7 +58,7 @@ module hazard_controller (
 	logic ex_overload;		// Branch prediction wrong
 	//    lw_hazard;		// Load word hazard (input from forward unit)
 	logic dc_miss;			// D cache miss
-
+	logic inc_ic_amiss;
 	logic branch_miss;
 	logic branch_hit;
 
