@@ -59,6 +59,7 @@ module mips_core (
 
 	// 
 	logic ic_miss;
+	logic sbuf_hit;
 	cache_output_ifc sb_output();
 
 	// ==== IF to DEC
@@ -141,6 +142,7 @@ module mips_core (
 
 		.i_pc_current (if_pc_current),
 		.i_pc_next    (if_pc_next),
+		.sbuf_hit (sbuf_hit),
 
 		.out          (if_i_cache_output)
 	);
@@ -160,7 +162,7 @@ module mips_core (
 		.ic_miss(ic_miss),
 
 		.sb_out          (sb_output),
-
+		.sbuf_hit (sbuf_hit),
 		.mem_read_address(mem_read_address[2]),
 		.mem_read_data   (mem_read_data[2])
 	);

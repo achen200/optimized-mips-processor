@@ -32,6 +32,7 @@ module i_cache #(
 	// General signals
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
+	input sbuf_hit, //If stream buffer hits
 
 	// Request
 	pc_ifc.in i_pc_current,
@@ -215,7 +216,7 @@ module i_cache #(
 				begin
 					if (miss)
 					begin
-						$display("ICACHE READY_MISS: pc_top %h", {i_tag, i_index});
+						$display("ICACHE READY_MISS: pc %h", {i_tag, i_index, i_block_offset, 2'b0});
 						r_tag <= i_tag;
 						r_index <= i_index;
 					end

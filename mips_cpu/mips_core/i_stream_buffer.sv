@@ -9,6 +9,7 @@ module i_stream_buffer #(
     // General signals
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
+	output sbuf_hit,
 
     // Request
 	pc_ifc.in i_pc_current,
@@ -68,9 +69,12 @@ module i_stream_buffer #(
 	logic last_refill_word;
 	logic [LINE_SIZE-1:0] ctr, next_ctr; //Counters to stall
 	
-	assign {i_tag, i_index, i_block_offset} = i_pc_current.pc[`ADDR_WIDTH - 1 : 2];
-	assign {n_tag, n_index} = {i_tag, i_index} + 1'b1; 
+	assign {i_tag, i_index, i_block_offset} = i_pc_current.pc[`ADDR_WIDTH - 1 : 2];				
+	assign {i_tag_next, i_index_next, i_block_offset_next} = i_pc_next.pc[`ADDR_WIDTH - 1 : 2]; //Read information
+	assign {n_tag, n_index} = {i_tag, i_index} + 1'b1; 		//Write information
 	assign raddr = {i_tag, i_index} % BUF_DEPTH;
+	assign raddr_n = {i_tag_next, i_index_next} % BUF_DEPTH;
+	assign sbuf_hit = hit;
 
 
 	logic hit, miss;
@@ -78,7 +82,7 @@ module i_stream_buffer #(
 		hit = valid_bits[raddr] 
 			& ({i_tag, i_index} == pc_table[raddr]) 
 			& (state == STATE_READY);
-
+		miss = ~hit;
 		next_ctr = ctr + 1;
 		last_refill_word = (ctr == LINE_SIZE-1) 
 			& mem_read_data.RVALID;
@@ -104,7 +108,7 @@ module i_stream_buffer #(
 			case (state)
 				STATE_READY:
 				begin
-					if(~ic_out.valid) begin //~ic_out.valid
+					if(~ic_out.valid && miss) begin //~ic_out.valid
 						$display("STREAM READY MISS: pc_top %h ", {i_tag, i_index});
 						r_tag <= n_tag;
 						r_index <= n_index;
@@ -134,7 +138,7 @@ module i_stream_buffer #(
 		next_state = state;
 		unique case(state)
 			STATE_READY:
-				if (~ic_out.valid) //~ic_out.valid
+				if (~ic_out.valid && miss) //~ic_out.valid
 				begin
 					next_state = STATE_REFILL_REQUEST;
 				end
@@ -154,19 +158,30 @@ module i_stream_buffer #(
 	end
 
 	//Reading from buffer
-	always_ff @(posedge clk) begin
-		if(ic_out.valid) 
-			int_valid <= 1'b0;
+	// always_ff @(posedge clk) begin
+	// 	if(ic_out.valid) 
+	// 		int_valid <= 1'b0;
+	// 	else begin
+	// 		if(hit && ~ic_out.valid) begin //if in table and cache missed
+	// 			$display("READ FROM TABLE: STATE %h curr_pc %h stored_pc %h data_table[%h][%h]: %h", state, i_pc_current.pc, pc_table[raddr], raddr, i_block_offset, data_table[raddr][i_block_offset]);
+	// 			int_valid <= 1'b1;
+	// 			int_data <= data_table[raddr][i_block_offset];
+	// 		end
+	// 		else int_valid <= 1'b0;
+	// 	end
+	// end
+	always_comb begin
+		if(ic_out.valid)
+			int_valid = 1'b0;
 		else begin
 			if(hit && ~ic_out.valid) begin
-				$display("READ FROM TABLE: curr_pc %h stored_pc %h data_table[%h][%h]: %h", i_pc_current.pc, pc_table[raddr], raddr, i_block_offset, data_table[raddr][i_block_offset]);
-				int_valid <= 1'b1;
-				int_data <= data_table[raddr][i_block_offset];
+				$display("READ FROM TABLE: STATE %h curr_pc %h stored_pc %h data_table[%h][%h]: %h", state, i_pc_current.pc, pc_table[raddr], raddr, i_block_offset, data_table[raddr][i_block_offset]);
+				int_valid = 1'b1;
+				int_data = data_table[raddr][i_block_offset];
 			end
-			else int_valid <= 0'b0;
+			else int_valid = 1'b0;
 		end
 	end
-
 	//Output logic
 	always_comb begin
         if(int_valid) begin
