@@ -215,18 +215,20 @@ module i_cache #(
 				begin
 					if (miss)
 					begin
+						$display("ICACHE READY_MISS: pc_top %h", {i_tag, i_index});
 						r_tag <= i_tag;
 						r_index <= i_index;
 					end
 				end
 				STATE_REFILL_REQUEST:
 				begin
+					$display("ICACHE REFILL_REQ: ");
 				end
 				STATE_REFILL_DATA:
 				begin
 					if (mem_read_data.RVALID)
 					begin
-						$display("Valid cache pc %h mem_addr %h offsetbits: %h data %h", i_pc_current.pc, mem_read_address.ARADDR, i_block_offset, mem_read_data.RDATA);
+						$display("ICACHE REFILL_DATA: pc %h memaddr %h data %h", i_pc_current.pc, mem_read_address.ARADDR, mem_read_data.RDATA);
 						databank_select <= {databank_select[LINE_SIZE - 2 : 0],
 							databank_select[LINE_SIZE - 1]};
 						valid_bits[r_index] <= last_refill_word;
