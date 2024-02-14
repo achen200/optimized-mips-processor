@@ -39,8 +39,8 @@ module i_stream_buffer #(
 	logic [LRU_WIDTH-1:0] waddr;
 	logic [LRU_WIDTH-1:0] raddr;
 
-	logic [TAG_WIDTH-1:0] i_tag;
-	logic [INDEX_WIDTH-1:0] i_index;
+	logic [TAG_WIDTH-1:0] i_tag, n_tag;
+	logic [INDEX_WIDTH-1:0] i_index, n_index;
 	logic [BLOCK_OFFSET_WIDTH-1:0] i_block_offset;
 	//refill
 	logic [TAG_WIDTH-1:0] r_tag;
@@ -68,16 +68,17 @@ module i_stream_buffer #(
 	logic last_refill_word;
 	logic [LINE_SIZE-1:0] ctr, next_ctr; //Counters to stall
 	
-	assign new_pc = i_pc_current.pc[`ADDR_WIDTH - 1 : 2];
-	assign {i_tag, i_index, i_block_offset} = new_pc + 1'b1;
+	assign {i_tag, i_index, i_block_offset} = i_pc_current.pc[`ADDR_WIDTH - 1 : 2];
+	assign {n_tag, n_index} = {i_tag, i_index} + 1'b1; 
 	assign raddr = {i_tag, i_index} % BUF_DEPTH;
+
 
 	logic hit, miss;
 	always_comb begin
 		hit = valid_bits[raddr] 
 			& ({i_tag, i_index} == pc_table[raddr]) 
 			& (state == STATE_READY);
-		miss = ~hit;
+
 		next_ctr = ctr + 1;
 		last_refill_word = (ctr == LINE_SIZE-1) 
 			& mem_read_data.RVALID;
@@ -105,8 +106,8 @@ module i_stream_buffer #(
 				begin
 					if(~ic_out.valid) begin //~ic_out.valid
 						$display("STREAM READY MISS: pc_top %h ", {i_tag, i_index});
-						r_tag <= i_tag;
-						r_index <= i_index;
+						r_tag <= n_tag;
+						r_index <= n_index;
 					end
 				end
 				STATE_REFILL_REQUEST:
@@ -117,7 +118,7 @@ module i_stream_buffer #(
 				STATE_REFILL_DATA:
 				begin
 					if(mem_read_data.RVALID) begin
-						$display("STREAM REFILL_DATA: pc %h stored_pc %h memaddr %h value %h last_word %h", i_pc_current.pc, {r_tag, r_index}, mem_read_address.ARADDR, wdata, last_refill_word); // wrote to %h, waddr
+						$display("STREAM REFILL_DATA: pc %h stored_pc %h memaddr %h value %h last_word %h", {n_tag, n_index}, {r_tag, r_index}, mem_read_address.ARADDR, wdata, last_refill_word); // wrote to %h, waddr
 						pc_table[waddr] <= {r_tag, r_index};
 						data_table[waddr][ctr] <= wdata;
 						valid_bits[waddr] <= last_refill_word;
