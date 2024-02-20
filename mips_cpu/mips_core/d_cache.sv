@@ -58,7 +58,14 @@ module d_cache #(
 	axi_write_data.master mem_write_data,
 	axi_write_response.master mem_write_response,
 	axi_read_address.master mem_read_address,
-	axi_read_data.master mem_read_data
+	axi_read_data.master mem_read_data,
+
+	// Additional memory unit to prefetch
+	axi_write_address.master mem_write_address2,
+	axi_write_data.master mem_write_data2,
+	axi_write_response.master mem_write_response2,
+	axi_read_address.master mem_read_address2,
+	axi_read_data.master mem_read_data2
 );
 	localparam TAG_WIDTH = `ADDR_WIDTH - INDEX_WIDTH - BLOCK_OFFSET_WIDTH - 2;
 	localparam LINE_SIZE = 1 << BLOCK_OFFSET_WIDTH;
@@ -97,6 +104,9 @@ module d_cache #(
 	// Registers for flushing and refilling
 	logic [INDEX_WIDTH - 1:0] r_index;
 	logic [TAG_WIDTH - 1:0] r_tag;
+
+	logic [INDEX_WIDTH - 1:0] r_index2;
+	logic [TAG_WIDTH - 1:0] r_tag2;
 
 	// databank signals
 	logic [LINE_SIZE - 1 : 0] databank_select;

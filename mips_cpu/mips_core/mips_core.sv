@@ -112,11 +112,11 @@ module mips_core (
 	axi_read_address axi_read_address();
 	axi_read_data axi_read_data();
 
-	axi_write_address mem_write_address[1]();
-	axi_write_data mem_write_data[1]();
-	axi_write_response mem_write_response[1]();
-	axi_read_address mem_read_address[3]();
-	axi_read_data mem_read_data[3]();
+	axi_write_address mem_write_address[2]();
+	axi_write_data mem_write_data[2]();
+	axi_write_response mem_write_response[2]();
+	axi_read_address mem_read_address[4]();
+	axi_read_data mem_read_data[4]();
 
 
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -282,7 +282,14 @@ module mips_core (
 
 		.mem_write_address(mem_write_address[0]),
 		.mem_write_data(mem_write_data[0]),
-		.mem_write_response(mem_write_response[0])
+		.mem_write_response(mem_write_response[0]),
+
+		.mem_write_address2(mem_write_address[1]),
+		.mem_write_data2(mem_write_data[1]),
+		.mem_write_response2(mem_write_response[1]),
+
+		.mem_read_address2(mem_read_address[3]),
+		.mem_read_data2   (mem_read_data[3])
 	);
 	// If you want to change the line size and total size of data cache,
 	// uncomment the following two lines and change the parameter.
@@ -338,7 +345,7 @@ module mips_core (
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 	// xxxx Memory Arbiter
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-	memory_arbiter #(.WRITE_MASTERS(1), .READ_MASTERS(3)) MEMORY_ARBITER (
+	memory_arbiter #(.WRITE_MASTERS(2), .READ_MASTERS(4)) MEMORY_ARBITER (
 		.clk, .rst_n,
 		.axi_write_address,
 		.axi_write_data,

@@ -155,7 +155,7 @@ module i_stream_buffer #(
 			int_valid = 1'b0;
 		else begin
 			if(hit && ~ic_out.valid) begin
-				$display("READ FROM TABLE: STATE %h curr_pc %h stored_pc %h data_table[%h][%h]: %h", state, i_pc_current.pc, pc_table[raddr], raddr, i_block_offset, data_table[raddr][i_block_offset]);
+				// $display("READ FROM TABLE: STATE %h curr_pc %h stored_pc %h data_table[%h][%h]: %h", state, i_pc_current.pc, pc_table[raddr], raddr, i_block_offset, data_table[raddr][i_block_offset]);
 				int_valid = 1'b1;
 				int_data = data_table[raddr][i_block_offset];
 			end
