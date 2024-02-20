@@ -213,6 +213,10 @@ module d_cache #(
 	logic last_flush_word;
 	logic last_refill_word;
 
+	initial begin
+		stride = '1;
+	end
+
 	always_comb
 	begin
 		tag_hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[0][i_index])
