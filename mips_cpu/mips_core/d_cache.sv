@@ -108,6 +108,9 @@ module d_cache #(
 	logic [INDEX_WIDTH - 1:0] r_index2;
 	logic [TAG_WIDTH - 1:0] r_tag2;
 
+	// Stride for prefetch
+	logic [3:0] stride;
+
 	// databank signals
 	logic [LINE_SIZE - 1 : 0] databank_select;
 	logic [LINE_SIZE - 1 : 0] databank_we[ASSOCIATIVITY];
@@ -115,6 +118,14 @@ module d_cache #(
 	logic [INDEX_WIDTH - 1 : 0] databank_waddr;
 	logic [INDEX_WIDTH - 1 : 0] databank_raddr;
 	logic [`DATA_WIDTH - 1 : 0] databank_rdata [ASSOCIATIVITY][LINE_SIZE];
+
+// databank signals for prefetch
+	logic [LINE_SIZE - 1 : 0] databank_select2;
+	logic [LINE_SIZE - 1 : 0] databank_we2[ASSOCIATIVITY];
+	logic [`DATA_WIDTH - 1 : 0] databank_wdata2;
+	logic [INDEX_WIDTH - 1 : 0] databank_waddr2;
+	logic [INDEX_WIDTH - 1 : 0] databank_raddr2;
+	logic [`DATA_WIDTH - 1 : 0] databank_rdata2 [ASSOCIATIVITY][LINE_SIZE];
 
 	logic select_way;
 	logic r_select_way;
@@ -127,7 +138,7 @@ module d_cache #(
 		begin : datasets
 			for (w=0; w< ASSOCIATIVITY; w++)
 			begin : databanks
-				cache_bank #(
+				cache_bank_double_access #(
 					.DATA_WIDTH (`DATA_WIDTH),
 					.ADDR_WIDTH (INDEX_WIDTH)
 				) databank (
@@ -137,7 +148,14 @@ module d_cache #(
 					.i_waddr(databank_waddr),
 					.i_raddr(databank_raddr),
 
-					.o_rdata(databank_rdata[w][g])
+					.o_rdata(databank_rdata[w][g]),
+
+					.i_we (databank_we2[w][g]),
+					.i_wdata(databank_wdata2),
+					.i_waddr(databank_waddr2),
+					.i_raddr(databank_raddr2),
+
+					.o_rdata(databank_rdata2[w][g])
 				);
 			end
 		end
@@ -149,6 +167,13 @@ module d_cache #(
 	logic [INDEX_WIDTH - 1 : 0] tagbank_waddr;
 	logic [INDEX_WIDTH - 1 : 0] tagbank_raddr;
 	logic [TAG_WIDTH - 1 : 0] tagbank_rdata[ASSOCIATIVITY];
+
+	// tagbank signals for prefetch
+	logic tagbank_we2[ASSOCIATIVITY];
+	logic [TAG_WIDTH - 1 : 0] tagbank_wdata2;
+	logic [INDEX_WIDTH - 1 : 0] tagbank_waddr2;
+	logic [INDEX_WIDTH - 1 : 0] tagbank_raddr2;
+	logic [TAG_WIDTH - 1 : 0] tagbank_rdata2[ASSOCIATIVITY];
 
 	generate
 		for (w=0; w< ASSOCIATIVITY; w++)
@@ -163,7 +188,14 @@ module d_cache #(
 				.i_waddr (tagbank_waddr),
 				.i_raddr (tagbank_raddr),
 
-				.o_rdata (tagbank_rdata[w])
+				.o_rdata (tagbank_rdata[w]),
+
+				.i_we2    (tagbank_we2[w]),
+				.i_wdata2 (tagbank_wdata2),
+				.i_waddr2 (tagbank_waddr2),
+				.i_raddr2 (tagbank_raddr2),
+
+				.o_rdata2 (tagbank_rdata2[w])
 			);
 		end
 	endgenerate

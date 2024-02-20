@@ -16,7 +16,7 @@
  *
  * See wiki page "Synchronous Caches" for details.
  */
-module cache_bank #(parameter DATA_WIDTH = 32, parameter ADDR_WIDTH = 4)(
+module cache_bank_double_access #(parameter DATA_WIDTH = 32, parameter ADDR_WIDTH = 4)(
 	input clk,	// Clock
 	input i_we,	// Write enable
 	input logic [DATA_WIDTH - 1 : 0] i_wdata,			// Write data
