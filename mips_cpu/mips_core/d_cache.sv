@@ -84,7 +84,15 @@ module d_cache #(
 	logic [INDEX_WIDTH - 1 : 0] i_index;
 	logic [BLOCK_OFFSET_WIDTH - 1 : 0] i_block_offset;
 
+	// Stride for prefetch
+	logic [3:0] stride;
+	logic [INDEX_WIDTH - 1 : 0] i_index2;
+
 	logic [INDEX_WIDTH - 1 : 0] i_index_next;
+	logic [INDEX_WIDTH - 1 : 0] i_index_next2;
+
+	assign i_index2 = i_index + stride;
+	assign i_index_next2 = i_index2 + stride;
 
 	assign {i_tag, i_index, i_block_offset} = in.addr[`ADDR_WIDTH - 1 : 2];
 	assign i_index_next = in.addr_next[BLOCK_OFFSET_WIDTH + 2 +: INDEX_WIDTH];
@@ -108,9 +116,6 @@ module d_cache #(
 	logic [INDEX_WIDTH - 1:0] r_index2;
 	logic [TAG_WIDTH - 1:0] r_tag2;
 
-	// Stride for prefetch
-	logic [3:0] stride;
-
 	// databank signals
 	logic [LINE_SIZE - 1 : 0] databank_select;
 	logic [LINE_SIZE - 1 : 0] databank_we[ASSOCIATIVITY];
@@ -129,6 +134,10 @@ module d_cache #(
 
 	logic select_way;
 	logic r_select_way;
+
+	logic select_way2;
+	logic r_select_way2;
+
 	logic [DEPTH - 1 : 0] lru_rp;
 
 	// databanks
@@ -150,12 +159,12 @@ module d_cache #(
 
 					.o_rdata(databank_rdata[w][g]),
 
-					.i_we (databank_we2[w][g]),
-					.i_wdata(databank_wdata2),
-					.i_waddr(databank_waddr2),
-					.i_raddr(databank_raddr2),
+					.i_we2 (databank_we2[w][g]),
+					.i_wdata2(databank_wdata2),
+					.i_waddr2(databank_waddr2),
+					.i_raddr2(databank_raddr2),
 
-					.o_rdata(databank_rdata2[w][g])
+					.o_rdata2(databank_rdata2[w][g])
 				);
 			end
 		end
@@ -178,7 +187,7 @@ module d_cache #(
 	generate
 		for (w=0; w< ASSOCIATIVITY; w++)
 		begin: tagbanks
-			cache_bank #(
+			cache_bank_double_access #(
 				.DATA_WIDTH (TAG_WIDTH),
 				.ADDR_WIDTH (INDEX_WIDTH)
 			) tagbank (
@@ -207,11 +216,15 @@ module d_cache #(
 
 	// Shift registers for flushing
 	logic [`DATA_WIDTH - 1 : 0] shift_rdata[LINE_SIZE];
+	logic [`DATA_WIDTH - 1 : 0] shift_rdata2[LINE_SIZE];
 
 	// Intermediate signals
 	logic hit, miss, tag_hit;
 	logic last_flush_word;
 	logic last_refill_word;
+
+	logic last_flush_word2;
+	logic last_refill_word2;
 
 	initial begin
 		stride = '1;
@@ -227,25 +240,32 @@ module d_cache #(
 		miss = in.valid & ~hit;
 		last_flush_word = databank_select[LINE_SIZE - 1] & mem_write_data.WVALID;
 		last_refill_word = databank_select[LINE_SIZE - 1] & mem_read_data.RVALID;
+
+		last_flush_word2 = databank_select2[LINE_SIZE - 1] & mem_write_data2.WVALID;
+		last_refill_word2 = databank_select2[LINE_SIZE - 1] & mem_read_data2.RVALID;
 	
 		if (hit)
 		begin
 			if (i_tag == tagbank_rdata[0])
 			begin
 				select_way = 'b0;
+				select_way2 = 'b0;
 			end
 			else 
 			begin
 				select_way = 'b1;
+				select_way2 = 'b1;
 			end
 		end
 		else if (miss)
 		begin
 			select_way = lru_rp[i_index];
+			select_way2 = lru_rp[i_index2];
 		end
 		else
 		begin
 			select_way = 'b0;
+			select_way2 = 'b0;
 		end
 	
 	end
@@ -259,10 +279,24 @@ module d_cache #(
 		mem_write_data.WVALID = state == STATE_FLUSH_DATA;
 		mem_write_data.WID = 0;
 		mem_write_data.WDATA = shift_rdata[0];
-		mem_write_data.WLAST = last_flush_word;
+		mem_write_data.WLAST = last_flush_word2;
 
 		// Always ready to consume write response
 		mem_write_response.BREADY = 1'b1;
+
+
+		// Prefetch
+		mem_write_address2.AWVALID = state == STATE_FLUSH_REQUEST;
+		mem_write_address2.AWID = 0;
+		mem_write_address2.AWLEN = LINE_SIZE;
+		mem_write_address2.AWADDR = {tagbank_rdata2[r_select_way2], i_index2, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
+		mem_write_data2.WVALID = state == STATE_FLUSH_DATA;
+		mem_write_data2.WID = 0;
+		mem_write_data2.WDATA = shift_rdata2[0];
+		mem_write_data2.WLAST = last_flush_word;
+
+		// Always ready to consume write response
+		mem_write_response2.BREADY = 1'b1;
 	end
 
 	always_comb begin
@@ -273,16 +307,32 @@ module d_cache #(
 
 		// Always ready to consume data
 		mem_read_data.RREADY = 1'b1;
+
+		// Prefetch data
+		mem_read_address2.ARADDR = {r_tag2, r_index2, {BLOCK_OFFSET_WIDTH + 2{1'b0}}};
+		mem_read_address2.ARLEN = LINE_SIZE;
+		mem_read_address2.ARVALID = state == STATE_REFILL_REQUEST;
+		mem_read_address2.ARID = 4'd1;
+
+		// Always ready to consume data
+		mem_read_data2.RREADY = 1'b1;
 	end
 
 	always_comb
 	begin
-		for (int i=0; i<ASSOCIATIVITY;i++)
+		for (int i=0; i<ASSOCIATIVITY;i++) begin
 			databank_we[i] = '0;
+			databank_we2[i] = '0;
+		end
 		if (mem_read_data.RVALID)				// We are refilling data
 			databank_we[r_select_way] = databank_select;
 		else if (hit & (in.mem_action == WRITE))	// We are storing a word
 			databank_we[select_way][i_block_offset] = 1'b1;
+
+		if (mem_read_data2.RVALID)				// We are refilling data
+			databank_we2[r_select_way2] = databank_select2;
+		else if (hit & (in.mem_action == WRITE))	// We are storing a word
+			databank_we2[select_way2][i_block_offset] = 1'b1;
 	end
 
 	always_comb
@@ -291,10 +341,16 @@ module d_cache #(
 		begin
 			databank_wdata = in.data;
 			databank_waddr = i_index;
-			if (next_state == STATE_FLUSH_REQUEST)
+			databank_wdata2 = mem_read_data2.RDATA;
+			databank_waddr2 = r_index2;
+			if (next_state == STATE_FLUSH_REQUEST) begin
 				databank_raddr = i_index;
-			else
+				databank_raddr2 = i_index2;
+			end
+			else begin
 				databank_raddr = i_index_next;
+				databank_raddr2 = i_index_next2;
+			end
 		end
 		else
 		begin
@@ -304,6 +360,13 @@ module d_cache #(
 				databank_raddr = i_index_next;
 			else
 				databank_raddr = r_index;
+
+			databank_wdata2 = mem_read_data2.RDATA;
+			databank_waddr2 = r_index2;
+			if (next_state == STATE_READY)
+				databank_raddr2 = i_index_next2;
+			else
+				databank_raddr2 = r_index2;
 		end
 	end
 
@@ -314,6 +377,12 @@ module d_cache #(
 		tagbank_wdata = r_tag;
 		tagbank_waddr = r_index;
 		tagbank_raddr = i_index_next;
+
+		tagbank_we2[r_select_way2] = last_refill_word2;
+		tagbank_we2[~r_select_way2] = '0;
+		tagbank_wdata2 = r_tag2;
+		tagbank_waddr2 = r_index2;
+		tagbank_raddr2 = i_index_next2;
 	end
 
 	always_comb
@@ -328,25 +397,26 @@ module d_cache #(
 		unique case (state)
 			STATE_READY:
 				if (miss)
-					if (valid_bits[select_way][i_index] & dirty_bits[select_way][i_index])
+					if ((valid_bits[select_way][i_index] & dirty_bits[select_way][i_index])
+						| (valid_bits[select_way2][i_index2] & dirty_bits[select_way2][i_index2]))
 						next_state = STATE_FLUSH_REQUEST;
 					else
 						next_state = STATE_REFILL_REQUEST;
 
 			STATE_FLUSH_REQUEST:
-				if (mem_write_address.AWREADY)
+				if (mem_write_address.AWREADY & mem_write_address2.AWREADY)
 					next_state = STATE_FLUSH_DATA;
 
 			STATE_FLUSH_DATA:
-				if (last_flush_word && mem_write_data.WREADY)
+				if (last_flush_word && mem_write_data.WREADY && last_flush_word2 && mem_write_data2.WREADY)
 					next_state = STATE_REFILL_REQUEST;
 
 			STATE_REFILL_REQUEST:
-				if (mem_read_address.ARREADY)
+				if (mem_read_address.ARREADY && mem_read_address2.ARREADY)
 					next_state = STATE_REFILL_DATA;
 
 			STATE_REFILL_DATA:
-				if (last_refill_word)
+				if (last_refill_word & last_refill_word2)
 					next_state = STATE_READY;
 		endcase
 	end
@@ -354,21 +424,25 @@ module d_cache #(
 	always_ff @(posedge clk) begin
 		if (~rst_n)
 			pending_write_response <= 1'b0;
-		else if (mem_write_address.AWVALID && mem_write_address.AWREADY)
+		else if (mem_write_address.AWVALID && mem_write_address.AWREADY && mem_write_address2.AWVALID && mem_write_address2.AWREADY)
 			pending_write_response <= 1'b1;
-		else if (mem_write_response.BVALID && mem_write_response.BREADY)
+		else if (mem_write_response.BVALID && mem_write_response.BREADY && mem_write_response2.BVALID && mem_write_response2.BREADY)
 			pending_write_response <= 1'b0;
 	end
 
 	always_ff @(posedge clk)
 	begin
-		if (state == STATE_FLUSH_DATA && mem_write_data.WREADY)
-			for (int i = 0; i < LINE_SIZE - 1; i++)
+		if (state == STATE_FLUSH_DATA && mem_write_data.WREADY && mem_write_data2.WREADY)
+			for (int i = 0; i < LINE_SIZE - 1; i++) begin
 				shift_rdata[i] <= shift_rdata[i+1];
+				shift_rdata2[i] <= shift_rdata2[i+1];
+			end
 
 		if (state == STATE_FLUSH_REQUEST && next_state == STATE_FLUSH_DATA)
-			for (int i = 0; i < LINE_SIZE; i++)
+			for (int i = 0; i < LINE_SIZE; i++) begin
 				shift_rdata[i] <= databank_rdata[r_select_way][i];
+				shift_rdata2[i] <= databank_rdata2[r_select_way2][i];
+			end
 	end
 
 	always_ff @(posedge clk)
@@ -377,6 +451,7 @@ module d_cache #(
 		begin
 			state <= STATE_READY;
 			databank_select <= 1;
+			databank_select2 <= 1;
 			for (int i=0; i<ASSOCIATIVITY;i++)
 				valid_bits[i] <= '0;
 			for (int i=0; i<DEPTH;i++)
@@ -394,32 +469,47 @@ module d_cache #(
 						r_tag <= i_tag;
 						r_index <= i_index;
 						r_select_way <= select_way;
+
+						r_tag2 <= i_tag;
+						r_index2 <= i_index2;
+						r_select_way2 <= select_way2;
 					end
-					else if (in.mem_action == WRITE)
+					else if (in.mem_action == WRITE) begin
 						dirty_bits[select_way][i_index] <= 1'b1;
+						dirty_bits[select_way2][i_index2] <= 1'b1;
+					end
 					if (in.valid)
 					begin
 						lru_rp[i_index] <= ~select_way;
+						lru_rp[i_index2] <= ~select_way2;
 					end
 				end
 
 				STATE_FLUSH_DATA:
 				begin
-					if (mem_write_data.WREADY)
+					if (mem_write_data.WREADY & mem_write_data2.WREADY) begin
 						databank_select <= {databank_select[LINE_SIZE - 2 : 0],
 							databank_select[LINE_SIZE - 1]};
+						databank_select2 <= {databank_select2[LINE_SIZE - 2 : 0],
+							databank_select2[LINE_SIZE - 1]};
+					end
 				end
 
 				STATE_REFILL_DATA:
 				begin
-					if (mem_read_data.RVALID)
+					if (mem_read_data.RVALID & mem_read_data2.RVALID) begin
 						databank_select <= {databank_select[LINE_SIZE - 2 : 0],
 							databank_select[LINE_SIZE - 1]};
+						databank_select2 <= {databank_select2[LINE_SIZE - 2 : 0],
+							databank_select2[LINE_SIZE - 1]};
+					end
 
-					if (last_refill_word)
+					if (last_refill_word & last_refill_word2)
 					begin
 						valid_bits[r_select_way][r_index] <= 1'b1;
 						dirty_bits[r_select_way][r_index] <= 1'b0;
+						valid_bits[r_select_way2][r_index2] <= 1'b1;
+						dirty_bits[r_select_way2][r_index2] <= 1'b0;
 					end
 				end
 			endcase

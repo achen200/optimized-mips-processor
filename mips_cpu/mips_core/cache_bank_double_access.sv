@@ -26,7 +26,7 @@ module cache_bank_double_access #(parameter DATA_WIDTH = 32, parameter ADDR_WIDT
     // Double access
     input i_we2,	// Write enable
 	input logic [DATA_WIDTH - 1 : 0] i_wdata2,			// Write data
-	input logic [ADDR_WIDTH - 1 : 0] i_waddr, i_raddr2,	// Write/read address
+	input logic [ADDR_WIDTH - 1 : 0] i_waddr2, i_raddr2,	// Write/read address
 	output logic [DATA_WIDTH - 1 : 0] o_rdata2			// Read data
 );
 
@@ -47,7 +47,7 @@ module cache_bank_double_access #(parameter DATA_WIDTH = 32, parameter ADDR_WIDT
 		if (ADDR_WIDTH < 4) begin
 			// OpenRAM requires at least 16 rows
 			// Use register based structure for shallow RAMs
-			cache_bank_core #(DATA_WIDTH, ADDR_WIDTH)
+			cache_bank_core_double_access #(DATA_WIDTH, ADDR_WIDTH)
 				BANK_CORE (
 					.clk, .i_we, .i_waddr, .i_raddr, .i_wdata,
 					.o_rdata(old_data),
@@ -55,7 +55,7 @@ module cache_bank_double_access #(parameter DATA_WIDTH = 32, parameter ADDR_WIDT
 					.o_rdata2(old_data2)
 			);
 		end else begin
-			sram #(.DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) BANK_CORE (
+			sram_double_access #(.DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) BANK_CORE (
 				// Port 0: W
 				.clk0(clk), .csb0(~i_we), .addr0(i_waddr), .din0(i_wdata),
 				// Port 1: R
@@ -82,7 +82,7 @@ module cache_bank_double_access #(parameter DATA_WIDTH = 32, parameter ADDR_WIDT
 	end
 endmodule
 
-module cache_bank_core #(parameter DATA_WIDTH = 32, parameter ADDR_WIDTH = 4)(
+module cache_bank_core_double_access #(parameter DATA_WIDTH = 32, parameter ADDR_WIDTH = 4)(
 	input clk,	// Clock
 	input i_we,	// Write enable
 	input logic [DATA_WIDTH - 1 : 0] i_wdata,			// Write data
@@ -112,7 +112,7 @@ endmodule
 
 `ifdef SIMULATION
 // OpenRAM SRAM model
-module sram(
+module sram_double_access(
 // Port 0: W
 		clk0,csb0,addr0,din0,
 // Port 1: R
