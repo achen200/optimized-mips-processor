@@ -40,7 +40,13 @@ module hazard_controller (
 	hazard_control_ifc.out m2w_hc,
 
 	// Load pc output
-	load_pc_ifc.out load_pc
+	load_pc_ifc.out load_pc,
+	cache_output_ifc.in d_cache_output,
+	cache_output_ifc.out predicted_value,
+
+	output recover_snapshot,
+	input [`DATA_WIDTH-1:0] r_to_s [32],
+	output [`DATA_WIDTH-1:0] s_to_r [32]
 );
 
 	branch_controller BRANCH_CONTROLLER (
@@ -49,6 +55,28 @@ module hazard_controller (
 		.dec_branch_decoded,
 		.ex_pc,
 		.ex_branch_result
+	);
+
+	logic take_snapshot;
+	logic vp_en;
+	logic correct_prediction;
+
+
+	register_snapshot REG_SNAPSHOT(
+		.clk, .rst_n,
+		.take_snapshot,
+		.regs_in(r_to_s),
+		.regs_snapshot(s_to_r)
+	);
+
+	value_prediction VALUE_PRED(
+		.clk, .rst_n,
+		.vp_en,
+		.addr(load_pc.new_pc),
+		.d_cache_data(d_cache_output),
+		.en_recover(recover_snapshot),
+		.correct_prediction,
+		.out(predicted_value)
 	);
 
 	// We have total 6 potential hazards
