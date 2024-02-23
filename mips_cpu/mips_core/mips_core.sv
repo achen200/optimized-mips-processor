@@ -90,6 +90,7 @@ module mips_core (
 
 	// |||| MEM Stage
 	cache_output_ifc mem_d_cache_output();
+	cache_output_ifc predicted_value();
 	logic mem_done;
 	write_back_ifc mem_write_back();
 
@@ -104,6 +105,9 @@ module mips_core (
 	hazard_control_ifc e2m_hc();
 	hazard_control_ifc m2w_hc();
 	load_pc_ifc load_pc();
+	logic recover_snapshot;
+	logic [`DATA_WIDTH-1:0] r_to_s [32];
+	logic [`DATA_WIDTH-1:0] s_to_r [32];
 
 	// xxxx Memory
 	axi_write_address axi_write_address();
@@ -193,8 +197,10 @@ module mips_core (
 
 		.i_decoded(dec_decoder_output),
 		.i_wb(m2w_write_back), // WB stage
-
-		.out(dec_reg_file_output)
+		.recover_snapshot(recover_snapshot),
+		.out(dec_reg_file_output),
+		.regs_out(r_to_s),
+		.regs_snapshot(s_to_r)
 	);
 
 	forward_unit FORWARD_UNIT(
@@ -291,10 +297,12 @@ module mips_core (
 	// 	D_CACHE.BLOCK_OFFSET_WIDTH = 2;
 
 	mem_stage_glue MEM_STAGE_GLUE (
-		.i_d_cache_output      (mem_d_cache_output),
+		// .i_d_cache_output      (mem_d_cache_output),
+		.i_d_cache_output      (predicted_value),
 		.i_d_cache_pass_through(e2m_d_cache_pass_through),
 		.o_done                (mem_done),
-		.o_write_back          (mem_write_back)
+		.o_write_back          (mem_write_back),
+		.predicted_value
 	);
 
 	// ========================================================================
@@ -332,7 +340,13 @@ module mips_core (
 		.d2e_hc,
 		.e2m_hc,
 		.m2w_hc,
-		.load_pc
+		.load_pc,
+		.recover_snapshot(recover_snapshot),
+		.s_to_r(s_to_r),
+		.r_to_s(r_to_s),
+		.d_cache_output(mem_d_cache_output),
+		.predicted_value,
+		.d_cache_req(e2m_d_cache_input)
 	);
 
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

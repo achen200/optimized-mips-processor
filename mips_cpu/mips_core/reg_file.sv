@@ -31,18 +31,29 @@ module reg_file (
 	write_back_ifc.in i_wb,
 
 	// Output data
-	reg_file_output_ifc.out out
+	reg_file_output_ifc.out out,
+	input recover_snapshot,
+	input  [`DATA_WIDTH-1:0] regs_snapshot[32],
+	output [`DATA_WIDTH-1:0] regs_out[32]
 );
 
 	logic [`DATA_WIDTH - 1 : 0] regs [32];
 
 	assign out.rs_data = i_decoded.uses_rs ? regs[i_decoded.rs_addr] : '0;
 	assign out.rt_data = i_decoded.uses_rt ? regs[i_decoded.rt_addr] : '0;
+	assign regs_out = regs; //assuming this works
+
 
 	always_ff @(posedge clk) begin
 		if(i_wb.uses_rw)
 		begin
 			regs[i_wb.rw_addr] = i_wb.rw_data;
+		end
+	end
+
+	always @(recover_snapshot) begin
+		if(recover_snapshot) begin
+			regs = regs_snapshot;
 		end
 	end
 
