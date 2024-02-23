@@ -155,7 +155,7 @@ module i_stream_buffer #(
 			int_valid = 1'b0;
 		else begin
 			if(hit && ~ic_out.valid) begin
-				$display("READ FROM TABLE: STATE %h curr_pc %h stored_pc %h data_table[%h][%h]: %h", state, i_pc_current.pc, pc_table[raddr], raddr, i_block_offset, data_table[raddr][i_block_offset]);
+				//$display("READ FROM TABLE: STATE %h curr_pc %h stored_pc %h data_table[%h][%h]: %h", state, i_pc_current.pc, pc_table[raddr], raddr, i_block_offset, data_table[raddr][i_block_offset]);
 				int_valid = 1'b1;
 				int_data = data_table[raddr][i_block_offset];
 			end
@@ -174,65 +174,4 @@ module i_stream_buffer #(
             sb_out.data  = ic_out.data;
         end
     end
-
-    // always_ff @(ic_miss) begin
-
-	// 	int_valid = 1'b0;
-    //     if (ic_miss) begin
-	// 		//Find first empty entry in the table
-	// 		byte first_empty = -1;
-	// 		logic int_valid = 1'b0;
-
-	// 		for(int i = 0; i < BUF_DEPTH; i++) begin
-	// 			if (empty_table[i] == 0 && first_empty == -1) begin
-	// 				first_empty = i;
-	// 			end
-	// 			//If we find PC that we're looking for (exception at pc_table[i] == 0)
-	// 			if (empty_table[i] != 0 && pc_table[i] == i_pc_current.pc) begin
-	// 				// $display("Found cached miss");
-	// 				// $display("pc: %d", i_pc_current.pc);
-	// 				int_data = data_table[i];
-    //             	int_valid = 1'b1;
-	// 				int_valid = 1'b1; 
-	// 			end
-	// 			else if(int_valid == 1) begin
-	// 				int_valid = 1'b1;
-	// 			end
-	// 			else begin
-	// 				int_valid = 1'b0;
-	// 			end
-	// 		end
-	// 		//If table not fully populated
-	// 		if(first_empty != -1 && int_valid == 0 && mem_read_data.RVALID)begin
-	// 			data_table[first_empty] = mem_read_data.RDATA;
-	// 			pc_table[first_empty] = i_pc_current.pc;
-	// 			empty_table[first_empty] = 1'b1;
-	// 		end
-	// 		// Else overwrite LRU entry
-	// 		else if (first_empty == -1 && int_valid == 0 && mem_read_data.RVALID)begin
-	// 			// $display("-------------Overwriting LRU at spot %d ---------------", lru);
-	// 			// $display("current pc: %d", i_pc_current.pc);
-	// 			// $display("-----Table:-----");
-	// 			// for(int j =0; j < BUF_DEPTH; j++)
-	// 			// 	$display("%d | %d", j, pc_table[j]);
-	// 			// $display("-----Table:-----");
-	// 			data_table[lru] = mem_read_data.RDATA;
-	// 			pc_table[lru] = i_pc_current.pc;
-	// 			lru = (lru+1) % BUF_DEPTH;
-	// 		end
-
-	// 		//$display("pc: %b", i_pc_current.pc);
-	// 		//$display("addr: %d", mem_read_address.ARADDR);
-	// 		//$display("data: %d", mem_read_data.RDATA);
-    //     end
-    // end
-
 endmodule
-
-
-// Plan
-// Implement the fetchings
-//      - Predictor logic
-//      - update table data
-// Data is being fetched 4 instructions in one memeory access
-//      - Deal with this problem

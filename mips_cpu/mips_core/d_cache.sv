@@ -227,6 +227,7 @@ module d_cache #(
 
 		// Always ready to consume data
 		mem_read_data.RREADY = 1'b1;
+		//mem_read_data2.RREADY = 1'b1;
 	end
 
 	always_comb
