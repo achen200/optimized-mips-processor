@@ -297,7 +297,8 @@ module mips_core (
 	// 	D_CACHE.BLOCK_OFFSET_WIDTH = 2;
 
 	mem_stage_glue MEM_STAGE_GLUE (
-		.i_d_cache_output      (mem_d_cache_output),
+		// .i_d_cache_output      (mem_d_cache_output),
+		.i_d_cache_output      (predicted_value),
 		.i_d_cache_pass_through(e2m_d_cache_pass_through),
 		.o_done                (mem_done),
 		.o_write_back          (mem_write_back),
@@ -344,7 +345,8 @@ module mips_core (
 		.s_to_r(s_to_r),
 		.r_to_s(r_to_s),
 		.d_cache_output(mem_d_cache_output),
-		.predicted_value
+		.predicted_value,
+		.d_cache_req(e2m_d_cache_input)
 	);
 
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

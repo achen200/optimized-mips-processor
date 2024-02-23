@@ -46,7 +46,8 @@ module hazard_controller (
 
 	output recover_snapshot,
 	input [`DATA_WIDTH-1:0] r_to_s [32],
-	output [`DATA_WIDTH-1:0] s_to_r [32]
+	output [`DATA_WIDTH-1:0] s_to_r [32],
+	d_cache_input_ifc.in d_cache_req,
 );
 
 	branch_controller BRANCH_CONTROLLER (
@@ -58,9 +59,12 @@ module hazard_controller (
 	);
 
 	logic take_snapshot;
-	logic vp_en;
 	logic correct_prediction;
-
+	logic vp_en;
+	logic [`DATA_WIDTH-1:0] pred_reg, pred;
+	logic vp_en_flag;
+	logic done;
+	logic pred_valid;
 
 	register_snapshot REG_SNAPSHOT(
 		.clk, .rst_n,
@@ -76,8 +80,61 @@ module hazard_controller (
 		.d_cache_data(d_cache_output),
 		.en_recover(recover_snapshot),
 		.correct_prediction,
-		.out(predicted_value)
+		.out(pred),
+		.done
 	);
+	//On load enable vp
+	always @(d_cache_req.valid) begin
+		if(d_cache_req.valid) begin
+			if(vp_en_flag) begin //First load, ready to predict
+				if(d_cache_req.mem_action == READ) begin
+					vp_en = 1'b1;
+				end
+			end
+			//else //Second load/store, need to stall until prediction ready
+				//STALL
+		end
+	end
+
+	always_comb begin
+		if(done) //Finished VP, 
+			vp_en_flag = 1'b1;
+	end
+
+	always_ff @(posedge clk) begin
+		if(vp_en) begin
+			pred_reg <= pred;
+			pred_valid <= 1'b1;
+			vp_en = 1'b0;
+			vp_en_flag = 1'b0;
+		end
+		else begin
+			pred_valid <= 1'b0;
+		end
+	end
+
+	assign predicted_value.data = pred_reg;
+	assign predicted_value.valid = pred_valid;
+
+
+
+	// always_ff @(posedge clk) begin
+	// 	// $display("LOADPC    : %h", load_pc.new_pc);
+	// 	if(d_cache_req.valid && d_cache_req.mem_action == READ) begin
+	// 		vp_en <= 'b1;
+	// 		// $display("DCACHE [%h]: %h", d_cache_req.mem_action, d_cache_req.addr);
+	// 		$display("Predicted value: %h", predicted_value);
+	// 	end
+
+	// 	else if (vp_en == 'b1) begin
+	// 		vp_en <= 'b0;
+	// 	end
+
+	// end
+
+
+	//logic -- upon new load, take snapshot, enable vp
+	//Assume lw_hazard is high whenever
 
 	// We have total 6 potential hazards
 	logic ic_miss;			// I cache miss

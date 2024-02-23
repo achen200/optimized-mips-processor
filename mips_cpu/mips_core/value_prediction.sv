@@ -8,8 +8,10 @@ module value_prediction #(
 
     cache_output_ifc.in d_cache_data,
 
-    cache_output_ifc.out out,
-    output en_recover, correct_prediction
+    //cache_output_ifc.out out,
+    output [`DATA_WIDTH - 1 : 0] out,
+    
+    output en_recover, correct_prediction, done
 );
 
 // Last predicted
@@ -18,42 +20,40 @@ logic [`DATA_WIDTH - 1 : 0] predicted;
 
 // Make prediction
 always_comb begin
-    //
+    // predict all zeros for now
+    predicted = '0;
 end
 
-always_ff @( posedge clk ) begin
+// always_ff @( posedge clk ) begin
+always_comb begin
+    done = 1'b0;
     if (rst_n) begin
-        out.valid <= 'b0;
-        out.data <= 0;
-        en_recover <= 'b0;
+        out = '0;
+        en_recover= 'b0;
     end
-
     else if (vp_en) begin
-        out.valid <= 'b1;
-        out.data <= predicted;
-        last_predicted <= predicted;
-        en_recover <= 'b0;
+        out = predicted;
+        last_predicted = predicted;
+        en_recover = 'b0;
     end
 
-    else if (d_cache_data.data != last_predicted) begin
-        // send signal to hazard controller
-        out.valid <= d_cache_data.valid;
-        out.data <= d_cache_data.data;
-        en_recover <= 'b1;
-        correct_prediction <= 'b0;
+    else if (d_cache_data.valid && d_cache_data.data != last_predicted) begin
+        out = d_cache_data.data;
+        en_recover = 'b1;
+        correct_prediction = 'b0;
     end
 
-    else if (d_cache_data.data == last_predicted) begin
-        out.valid <= d_cache_data.valid;
-        out.data <= d_cache_data.data;
-        en_recover <= 'b0;
-        correct_prediction <= 'b1;
+    else if (d_cache_data.valid && d_cache_data.data == last_predicted) begin
+        out = d_cache_data.data;
+        en_recover = 'b0;
+        correct_prediction = 'b1;
+        done = 'b1;
     end
 
     else begin
-        out.valid <= 'b0;
-        out.data <= 0;
-        en_recover <= 'b0;
+        out = '0;
+        en_recover = 'b0;
+        correct_prediction = 'b0;
     end
 end
     
