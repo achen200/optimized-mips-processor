@@ -11,7 +11,7 @@ module value_prediction #(
     //cache_output_ifc.out out,
     output [`DATA_WIDTH - 1 : 0] out,
     
-    output en_recover, correct_prediction, done
+    output en_recover, done
 );
 
 // Last predicted
@@ -27,7 +27,10 @@ end
 // always_ff @( posedge clk ) begin
 always_comb begin
     done = 1'b0;
-    if (rst_n) begin
+	out = '0;
+    en_recover = 1'b0;
+
+    if (~rst_n) begin
         out = '0;
         en_recover= 'b0;
     end
@@ -38,23 +41,18 @@ always_comb begin
     end
 
     else if (d_cache_data.valid && d_cache_data.data != last_predicted) begin
+		$display("VP: Triggering Recovery");
         out = d_cache_data.data;
         en_recover = 'b1;
-        correct_prediction = 'b0;
     end
 
     else if (d_cache_data.valid && d_cache_data.data == last_predicted) begin
+		$display("VP: Predicted Correct, no need for recovery");
         out = d_cache_data.data;
         en_recover = 'b0;
-        correct_prediction = 'b1;
-        done = 'b1;
+        done = 'b1;		//Done only set to 1 for correct prediction, otherwise vp_en waits for recovery_done bit
     end
 
-    else begin
-        out = '0;
-        en_recover = 'b0;
-        correct_prediction = 'b0;
-    end
 end
     
 endmodule

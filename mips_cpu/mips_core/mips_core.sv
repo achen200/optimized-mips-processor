@@ -106,6 +106,7 @@ module mips_core (
 	hazard_control_ifc m2w_hc();
 	load_pc_ifc load_pc();
 	logic recover_snapshot;
+	logic recovery_done;
 	logic [`DATA_WIDTH-1:0] r_to_s [32];
 	logic [`DATA_WIDTH-1:0] s_to_r [32];
 
@@ -200,7 +201,8 @@ module mips_core (
 		.recover_snapshot(recover_snapshot),
 		.out(dec_reg_file_output),
 		.regs_out(r_to_s),
-		.regs_snapshot(s_to_r)
+		.regs_snapshot(s_to_r),
+		.done(recovery_done)
 	);
 
 	forward_unit FORWARD_UNIT(
@@ -341,9 +343,10 @@ module mips_core (
 		.e2m_hc,
 		.m2w_hc,
 		.load_pc,
-		.recover_snapshot(recover_snapshot),
-		.s_to_r(s_to_r),
-		.r_to_s(r_to_s),
+		.recover_snapshot,
+		.recovery_done,
+		.s_to_r,
+		.r_to_s,
 		.d_cache_output(mem_d_cache_output),
 		.predicted_value,
 		.d_cache_req(e2m_d_cache_input)

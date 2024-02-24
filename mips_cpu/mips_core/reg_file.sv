@@ -34,15 +34,17 @@ module reg_file (
 	reg_file_output_ifc.out out,
 	input recover_snapshot,
 	input  [`DATA_WIDTH-1:0] regs_snapshot[32],
-	output [`DATA_WIDTH-1:0] regs_out[32]
+	output [`DATA_WIDTH-1:0] regs_out[32],
+	output done
 );
 
 	logic [`DATA_WIDTH - 1 : 0] regs [32];
+	logic d;
 
 	assign out.rs_data = i_decoded.uses_rs ? regs[i_decoded.rs_addr] : '0;
 	assign out.rt_data = i_decoded.uses_rt ? regs[i_decoded.rt_addr] : '0;
 	assign regs_out = regs; //assuming this works
-
+	assign done = d;
 
 	always_ff @(posedge clk) begin
 		if(i_wb.uses_rw)
@@ -54,6 +56,15 @@ module reg_file (
 	always @(recover_snapshot) begin
 		if(recover_snapshot) begin
 			regs = regs_snapshot;
+			d = 1'b1;
+			$display("=========== Recovered Snapshot ============");
+			for(int i = 0; i < 32; i++)
+				$display("=== R[%d]: %h", i, regs[i]);
+			$display("==========================================");
+		end
+		else begin
+			$display("recovery_done: 0");
+			d = 1'b0;
 		end
 	end
 
