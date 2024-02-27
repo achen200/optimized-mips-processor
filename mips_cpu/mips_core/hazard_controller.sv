@@ -148,12 +148,12 @@ module hazard_controller (
 		if(vp_lock) begin			 //Beginning of VP (prediction already outputed)
 			$display("VP Locked"); 	//, and predicted value valid");
 			vp_en = 1'b0;
-			predicted_value.valid = 1'b1;
+			//predicted_value.valid = 1'b1;
 		end
 		else begin						//End of VP
 			$display("VP Unlocked"); 	//, predicted value invalid");
-			vp_en = 1'b1;
-			predicted_value.valid = 1'b0;
+			//vp_en = 1'b1;
+			//predicted_value.valid = 1'b0;
 			
 			if(recover_snapshot) begin
 				$display("Flushing pipeline");

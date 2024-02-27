@@ -26,11 +26,13 @@ end
 
 always_ff @(posedge clk) begin
 	if(done | recovery_done | ~vp_en) begin
-		vp_lock_out <= 1'b0;
+		if(done | recovery_done)
+			vp_lock_out <= 1'b0;
 		out <= d_cache_data.data;
 		out_valid <= d_cache_data.valid;	//should be valid right after recovery
 	end
 	else if(vp_en) begin 
+		$display("VP enabled??");
 		if(~vp_lock_out) begin //First prediction: save address and "last_predicted"
 			vp_lock_out <= 1'b1; 
 			last_predicted <= predicted;
@@ -44,9 +46,6 @@ always_ff @(posedge clk) begin
 end
 
 always @(d_cache_data.valid) begin
-	en_recover = 1'b0;
-	done = 1'b0;
-
 	if(d_cache_data.valid) begin
 		if(d_cache_data.data != last_predicted) begin
 			$display("VP: Triggering Recovery");
@@ -56,6 +55,10 @@ always @(d_cache_data.valid) begin
 			$display("VP: Predicted Correct, no need for recovery");
 			done = 1'b1;
 		end
+	end
+	else begin
+		en_recover = 1'b0;
+		done = 1'b0;
 	end
 end
 
