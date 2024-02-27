@@ -80,42 +80,10 @@ module hazard_controller (
 		.d_cache_data(d_cache_output),
 		.en_recover(recover_snapshot),
 		.out(pred),
-		.done(vp_done)
+		.out_valid(pred_valid),
+		.done(vp_done),
+		.vp_lock_out(vp_lock)
 	);
-
-	always @(d_cache_req.valid) begin
-		if(d_cache_req.valid && ~vp_lock) begin
-			vp_en = 1'b1;
-			vp_lock = 1'b1;
-			take_snapshot = 1'b1;
-			$display("Begin VP");
-		end
-	end
-
-	always @(vp_lock) begin
-		if(vp_lock) begin			 //Beginning of VP (prediction already outputed)
-			vp_en = 1'b0;
-			predicted_value.data = pred;
-			predicted_value.valid = 1'b1;
-			$display("VP Locked, and predicted value valid");
-		end
-		else begin						//End of VP
-			vp_en = 1'b1;
-			predicted_value.valid = 1'b0;
-			$display("VP Unlocked, predicted value invalid");
-		end
-	end
-
-	always_comb begin
-		if(recovery_done || vp_done) begin //vp_done only happens when correct prediction
-			predicted_value.data = pred;
-			predicted_value.valid = 1'b1;
-			vp_lock = 1'b0;
-		end
-		if(rs_done) begin
-			take_snapshot = 1'b0;
-		end
-	end
 
 	// We have total 6 potential hazards
 	logic ic_miss;			// I cache miss
@@ -128,7 +96,85 @@ module hazard_controller (
 	logic branch_miss;
 	logic branch_hit;
 
-	// Determine if we have these hazards
+	// Control signals
+	logic if_stall, if_flush;
+	logic dec_stall, dec_flush;
+	logic ex_stall, ex_flush;
+	logic mem_stall, mem_flush;
+	// wb doesn't need to be stalled or flushed
+	// i.e. any data goes to wb is finalized and waiting to be commited
+
+	//Stall overrides
+	logic if_stall_ov, if_flush_ov; 
+	logic dec_stall_ov, dec_flush_ov;
+	logic ex_stall_ov, ex_flush_ov;
+	logic mem_stall_ov, mem_flush_ov;
+	logic ov_stall, ov_flush;
+
+	/*** Value Prediction ***/
+	assign predicted_value.data = pred;
+	assign predicted_value.valid = pred_valid;
+
+	always_comb begin
+		if_stall_ov = ov_stall;
+		dec_stall_ov = ov_stall;
+		ex_stall_ov = ov_stall;
+		mem_stall_ov = ov_stall;
+
+		if_flush_ov = ov_flush;
+		dec_flush_ov = ov_flush;
+		ex_flush_ov = ov_flush;
+		mem_flush_ov = ov_flush;
+	end
+
+	always @(d_cache_req.valid) begin
+		take_snapshot = 1'b0;
+		ov_stall  = 1'b0;
+		vp_en = 1'b0;
+
+		if(d_cache_req.valid && ~vp_lock) begin
+			vp_en = 1'b1;
+			take_snapshot = 1'b1;
+			$display("Begin VP");
+		end
+		else if(d_cache_req.valid && vp_lock) begin //second load request 
+			$display("Stall overrides on: stalling...");
+			ov_stall = 1'b1;
+		end
+	end
+
+	always @(vp_lock) begin
+		ov_flush = 1'b0;
+		if(vp_lock) begin			 //Beginning of VP (prediction already outputed)
+			$display("VP Locked"); 	//, and predicted value valid");
+			vp_en = 1'b0;
+			predicted_value.valid = 1'b1;
+		end
+		else begin						//End of VP
+			$display("VP Unlocked"); 	//, predicted value invalid");
+			vp_en = 1'b1;
+			predicted_value.valid = 1'b0;
+			
+			if(recover_snapshot) begin
+				$display("Flushing pipeline");
+				ov_flush = 1'b1;		//TODO: Find out if this turns off properly
+			end
+			$display("Stall overrides off");
+			ov_stall = 1'b0;
+			//$display("Current pc %h", load_pc.new_pc);
+		end
+	end
+
+	always_comb begin
+		// if(recovery_done || vp_done) begin //vp_done only happens when correct prediction
+		// 	predicted_value.valid = 1'b1;
+		// end
+		if(rs_done) begin
+			take_snapshot = 1'b0;
+		end
+	end
+
+	/*** Hazard Controls  ***/
 	always_comb
 	begin
 		ic_miss = ~if_i_cache_output.valid;
@@ -142,14 +188,6 @@ module hazard_controller (
 		// lw_hazard is determined by forward unit.
 		dc_miss = ~mem_done;
 	end
-
-	// Control signals
-	logic if_stall, if_flush;
-	logic dec_stall, dec_flush;
-	logic ex_stall, ex_flush;
-	logic mem_stall, mem_flush;
-	// wb doesn't need to be stalled or flushed
-	// i.e. any data goes to wb is finalized and waiting to be commited
 
 	/*
 	 * Now let's go over the solution of all hazards
@@ -177,51 +215,62 @@ module hazard_controller (
 	 */
 
 	always_comb
-	begin : handle_if
+	begin : handle_if	
 		if_stall = 1'b0;
 		if_flush = 1'b0;
 
-		if (ic_miss)
-		begin
+		if (ic_miss) begin
 			if_stall = 1'b1;
 			if_flush = 1'b1;
 		end
-
-		if (ex_overload)
-		begin
+		if (ex_overload) begin
 			if_stall = 1'b0;
 			if_flush = 1'b1;
 		end
-
 		if (dec_stall)
 			if_stall = 1'b1;
+		if(if_stall_ov)
+			if_stall = 1'b1;
+		if(if_flush_ov)
+			if_flush = 1'b1;
 	end
 
 	always_comb
 	begin : handle_dec
 		dec_stall = 1'b0;
 		dec_flush = 1'b0;
-
-		if (ds_miss | lw_hazard)
-		begin
+		if (ds_miss | lw_hazard) begin
 			dec_stall = 1'b1;
 			dec_flush = 1'b1;
 		end
-
 		if (ex_stall)
 			dec_stall = 1'b1;
+
+		if(dec_stall_ov)
+			dec_stall = 1'b1;
+		if(dec_flush_ov)
+			dec_flush = 1'b1;
 	end
 
 	always_comb
 	begin : handle_ex
 		ex_stall = mem_stall;
 		ex_flush = 1'b0;
+		if(ex_stall_ov) 
+			ex_stall = 1'b1;
+		if(ex_flush_ov)
+			ex_flush = 1'b1;
 	end
 
 	always_comb
 	begin : handle_mem
 		mem_stall = dc_miss;
 		mem_flush = dc_miss;
+		
+		if(mem_stall_ov) 
+			mem_stall = 1'b1;
+		if(mem_flush_ov)
+			mem_flush = 1'b1;
 	end
 
 	// Now distribute the control signals to each pipeline registers
