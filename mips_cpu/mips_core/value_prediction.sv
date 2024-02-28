@@ -7,17 +7,18 @@ module value_prediction #(
     input [`ADDR_WIDTH - 1 : 0] addr,
 
     cache_output_ifc.in d_cache_data,
+	d_cache_input_ifc.in d_cache_req,
 
-    //cache_output_ifc.out out,
     output [`DATA_WIDTH - 1 : 0] out,
-    
-    output en_recover, done, vp_lock_out, out_valid
+    output en_recover, done, vp_lock_out, out_valid, recovery_done_ack
 );
 
 // Last predicted
 logic [`DATA_WIDTH - 1 : 0] last_predicted;
 logic [`DATA_WIDTH - 1 : 0] predicted;
 logic [`DATA_WIDTH - 1 : 0] last_predicted_pc;
+logic [`DATA_WIDTH - 1 : 0] next_pred; 
+logic next_done, next_en_recover, next_valid;
 
 // Make prediction
 always_comb begin
@@ -25,14 +26,30 @@ always_comb begin
 end
 
 always_ff @(posedge clk) begin
-	if(done | recovery_done | ~vp_en) begin
-		if(done | recovery_done)
+	done <= next_done;
+	en_recover <= next_en_recover;
+
+	if(recovery_done) begin
+		$display("VP: finished recovery, correct data is: %h", next_pred);
+		//if(done | recovery_done)
+		recovery_done_ack <= 1'b1;
+		vp_lock_out <= 1'b0;
+		// out <= d_cache_data.data;			//Might have to change this
+		// out_valid <= d_cache_data.valid;	//should be valid right after recovery
+		out <= next_pred;
+		out_valid <= next_valid;
+	end
+	else if(~vp_en | done) begin
+		recovery_done_ack <= 1'b0;
+		//$display("Feeding normal d_cache_data");
+		if(done)
 			vp_lock_out <= 1'b0;
 		out <= d_cache_data.data;
-		out_valid <= d_cache_data.valid;	//should be valid right after recovery
+		out_valid <= d_cache_data.valid;
 	end
 	else if(vp_en) begin 
-		$display("VP enabled??");
+		$display("VP_en Enabled");
+		recovery_done_ack <= 1'b0;
 		if(~vp_lock_out) begin //First prediction: save address and "last_predicted"
 			vp_lock_out <= 1'b1; 
 			last_predicted <= predicted;
@@ -46,36 +63,27 @@ always_ff @(posedge clk) begin
 end
 
 always @(d_cache_data.valid) begin
-	if(d_cache_data.valid) begin
+	next_en_recover = 1'b0;
+	next_done = 1'b0;
+	next_pred = d_cache_data.data;
+	next_valid = 1'b0;
+	//$display("next_pred changing");
+
+	if(d_cache_data.valid && d_cache_req.mem_action == READ) begin
 		if(d_cache_data.data != last_predicted) begin
-			$display("VP: Triggering Recovery");
-			en_recover = 1'b1;
+			next_en_recover = 1'b1;
+			//next_pred = d_cache_data.data;
+			next_valid = d_cache_data.valid;
 		end
 		else begin
-			$display("VP: Predicted Correct, no need for recovery");
-			done = 1'b1;
+			//$display("Next_done on");
+			next_done = 1'b1;
+			//next_pred = d_cache_data.data;
+			next_valid = d_cache_data.valid;
 		end
 	end
-	else begin
-		en_recover = 1'b0;
-		done = 1'b0;
-	end
+	//else $display("Next_done off");
 end
-
-
-// always_comb begin
-// 	done = 1'b0;
-
-// 	if(d_cache_data.valid && d_cache_data != last_predicted) begin
-// 		$display("VP: Triggering Recovery");
-// 		en_recover = 'b1;
-// 	end
-// 	else if (d_cache_data.valid && d_cache_data == last_predicted) begin
-// 		$display("VP: Predicted Correct, no need for recovery");
-// 		done = 1'b1;
-// 		en_recover = 1'b0;
-// 	end
-// end
 
     
 endmodule

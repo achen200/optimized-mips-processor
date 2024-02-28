@@ -47,7 +47,7 @@ module hazard_controller (
 	input recovery_done,
 	input [`DATA_WIDTH-1:0] r_to_s [32],
 	output [`DATA_WIDTH-1:0] s_to_r [32],
-	output recover_snapshot,
+	output recover_snapshot, recovery_done_ack,
 	d_cache_input_ifc.in d_cache_req,
 );
 
@@ -78,10 +78,13 @@ module hazard_controller (
 		.vp_en,
 		.addr(load_pc.new_pc),
 		.d_cache_data(d_cache_output),
+		.d_cache_req,
 		.en_recover(recover_snapshot),
 		.out(pred),
 		.out_valid(pred_valid),
 		.done(vp_done),
+		.recovery_done,
+		.recovery_done_ack,
 		.vp_lock_out(vp_lock)
 	);
 
@@ -110,10 +113,22 @@ module hazard_controller (
 	logic ex_stall_ov, ex_flush_ov;
 	logic mem_stall_ov, mem_flush_ov;
 	logic ov_stall, ov_flush;
+	logic output_vp;
 
 	/*** Value Prediction ***/
 	assign predicted_value.data = pred;
 	assign predicted_value.valid = pred_valid;
+
+	always_comb begin
+		if(output_vp) begin
+			predicted_value.data = pred;
+			predicted_value.valid = pred_valid;
+		end
+		else begin
+			predicted_value.data = d_cache_output.data;
+			predicted_value.valid = d_cache_output.valid;
+		end
+	end
 
 	always_comb begin
 		if_stall_ov = ov_stall;
@@ -130,16 +145,24 @@ module hazard_controller (
 	always @(d_cache_req.valid) begin
 		take_snapshot = 1'b0;
 		ov_stall  = 1'b0;
+		ov_flush = 1'b0;
 		vp_en = 1'b0;
-
-		if(d_cache_req.valid && ~vp_lock) begin
+		output_vp = 1'b1;
+		
+		//First Store
+		if(d_cache_req.valid && d_cache_req.mem_action == WRITE && ~vp_lock) begin //Immediate execute
+			output_vp = 1'b0;
+		end
+		//First Load
+		else if(d_cache_req.valid && d_cache_req.mem_action == READ && ~vp_lock) begin
 			vp_en = 1'b1;
 			take_snapshot = 1'b1;
 			$display("Begin VP");
 		end
-		else if(d_cache_req.valid && vp_lock) begin //second load request 
-			$display("Stall overrides on: stalling...");
+		else if(d_cache_req.valid && vp_lock) begin //second load/store request 
+			$display("2nd L/S request, flushing and stalling...");
 			ov_stall = 1'b1;
+			ov_flush = 1'b1;
 		end
 	end
 
@@ -148,13 +171,9 @@ module hazard_controller (
 		if(vp_lock) begin			 //Beginning of VP (prediction already outputed)
 			$display("VP Locked"); 	//, and predicted value valid");
 			vp_en = 1'b0;
-			//predicted_value.valid = 1'b1;
 		end
 		else begin						//End of VP
 			$display("VP Unlocked"); 	//, predicted value invalid");
-			//vp_en = 1'b1;
-			//predicted_value.valid = 1'b0;
-			
 			if(recover_snapshot) begin
 				$display("Flushing pipeline");
 				ov_flush = 1'b1;		//TODO: Find out if this turns off properly
@@ -166,9 +185,6 @@ module hazard_controller (
 	end
 
 	always_comb begin
-		// if(recovery_done || vp_done) begin //vp_done only happens when correct prediction
-		// 	predicted_value.valid = 1'b1;
-		// end
 		if(rs_done) begin
 			take_snapshot = 1'b0;
 		end

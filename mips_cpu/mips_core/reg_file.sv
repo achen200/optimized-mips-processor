@@ -32,7 +32,7 @@ module reg_file (
 
 	// Output data
 	reg_file_output_ifc.out out,
-	input recover_snapshot,
+	input recover_snapshot, recovery_done_ack,
 	input  [`DATA_WIDTH-1:0] regs_snapshot[32],
 	output [`DATA_WIDTH-1:0] regs_out[32],
 	output done
@@ -44,7 +44,7 @@ module reg_file (
 	assign out.rs_data = i_decoded.uses_rs ? regs[i_decoded.rs_addr] : '0;
 	assign out.rt_data = i_decoded.uses_rt ? regs[i_decoded.rt_addr] : '0;
 	assign regs_out = regs; //assuming this works
-	assign done = d;
+	//assign done = d;
 
 	always_ff @(posedge clk) begin
 		if(i_wb.uses_rw)
@@ -53,6 +53,14 @@ module reg_file (
 		end
 	end
 
+	always_ff @(posedge clk) begin
+		if(d) 
+			done <= 1'b1;
+		else if(recovery_done_ack) begin //if ~d and recovery_done_ack 
+			done <= 1'b0;
+			$display("Done toggling off next cycle")
+		end
+	end
 	always @(recover_snapshot) begin
 		if(recover_snapshot) begin
 			regs = regs_snapshot;
@@ -63,7 +71,6 @@ module reg_file (
 			$display("==========================================");
 		end
 		else begin
-			$display("recovery_done: 0");
 			d = 1'b0;
 		end
 	end
