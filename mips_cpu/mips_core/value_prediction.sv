@@ -9,14 +9,14 @@ module value_prediction #(
     cache_output_ifc.in d_cache_data,
 	d_cache_input_ifc.in d_cache_req,
 
-    output [`DATA_WIDTH - 1 : 0] out,
+    output [`DATA_WIDTH - 1 : 0] out, 
+	output [`ADDR_WIDTH - 1 : 0] last_predicted_pc,
     output en_recover, done, vp_lock_out, out_valid, recovery_done_ack
 );
 
 // Last predicted
 logic [`DATA_WIDTH - 1 : 0] last_predicted;
 logic [`DATA_WIDTH - 1 : 0] predicted;
-logic [`DATA_WIDTH - 1 : 0] last_predicted_pc;
 logic [`DATA_WIDTH - 1 : 0] next_pred; 
 logic next_done, next_en_recover, next_valid;
 
@@ -28,8 +28,10 @@ end
 always_ff @(posedge clk) begin
 	done <= next_done;
 	en_recover <= next_en_recover;
+	// if(done) $display("VP: correct prediction, no need for recovery");
+	// if(en_recover & ~recovery_done_ack) $display("VP: incorrect prediction, triggering recovery");
 
-	if(recovery_done) begin
+	if(recovery_done & ~recovery_done_ack) begin 
 		// $display("VP: Finished recovery");
 		recovery_done_ack <= 1'b1;
 		vp_lock_out <= 1'b0;

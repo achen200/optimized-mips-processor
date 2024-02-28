@@ -35,7 +35,7 @@ module reg_file (
 	input recover_snapshot, recovery_done_ack,
 	input  [`DATA_WIDTH-1:0] regs_snapshot[32],
 	output [`DATA_WIDTH-1:0] regs_out[32],
-	output done
+	output logic done
 );
 
 	logic [`DATA_WIDTH - 1 : 0] regs [32];
@@ -67,8 +67,8 @@ module reg_file (
 			regs = regs_snapshot;
 			d = 1'b1;
 			// $display("=========== Recovered Snapshot ============");
-			// // for(int i = 0; i < 32; i++)
-			// // 	$display("=== R[%d]: %h", i, regs[i]);
+			// for(int i = 0; i < 32; i++)
+			// 	$display("=== R[%d]: %h", i, regs[i]);
 			// $display("==========================================");
 		end
 		else begin

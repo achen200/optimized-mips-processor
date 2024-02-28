@@ -59,7 +59,7 @@ module hazard_controller (
 		.ex_branch_result
 	);
 
-	logic take_snapshot;
+	logic take_snapshot, snapshot_ack;
 	logic vp_en, vp_done, vp_lock;
 	logic rs_done;
 	logic [`DATA_WIDTH-1:0] pred;
@@ -70,13 +70,14 @@ module hazard_controller (
 		.take_snapshot,
 		.regs_in(r_to_s),
 		.regs_snapshot(s_to_r),
-		.done(rs_done)
+		.done(rs_done),
+		.snapshot_ack
 	);
 
 	value_prediction VALUE_PRED(
 		.clk, .rst_n,
 		.vp_en,
-		.addr(load_pc.new_pc),
+		.addr(vp_pc),
 		.d_cache_data(d_cache_output),
 		.d_cache_req,
 		.en_recover(recover_snapshot),
@@ -85,7 +86,8 @@ module hazard_controller (
 		.done(vp_done),
 		.recovery_done,
 		.recovery_done_ack,
-		.vp_lock_out(vp_lock)
+		.vp_lock_out(vp_lock),
+		.last_predicted_pc(pc_out)
 	);
 
 	// We have total 6 potential hazards
@@ -108,16 +110,25 @@ module hazard_controller (
 	// i.e. any data goes to wb is finalized and waiting to be commited
 
 	//Stall overrides
-	logic if_stall_ov, if_flush_ov; 
+	logic if_stall_ov, if_flush_ov, if_stall_ov_off; 
 	logic dec_stall_ov, dec_flush_ov;
 	logic ex_stall_ov, ex_flush_ov;
 	logic mem_stall_ov, mem_flush_ov;
 	logic ov_stall, ov_flush;
 	logic output_vp;
+	logic save_pc; //, reset_pc;
+
+	logic [`ADDR_WIDTH-1:0] vp_pc, pc_out;
 
 	/*** Value Prediction ***/
 	assign predicted_value.data = pred;
 	assign predicted_value.valid = pred_valid;
+
+	always_ff @(posedge clk) begin
+		if(~save_pc) begin
+			vp_pc <= ex_pc.pc;
+		end
+	end
 
 	always_comb begin
 		if(output_vp) begin
@@ -134,16 +145,14 @@ module hazard_controller (
 		if_stall_ov = ov_stall;
 		dec_stall_ov = ov_stall;
 		ex_stall_ov = ov_stall;
-		//mem_stall_ov = ov_stall;
 
 		if_flush_ov = ov_flush;
 		dec_flush_ov = ov_flush;
 		ex_flush_ov = ov_flush;
-		//mem_flush_ov = ov_flush;
 	end
 
 	always @(d_cache_req.valid) begin
-		take_snapshot = 1'b0;
+		//take_snapshot = 1'b0;
 		ov_stall  = 1'b0;
 		ov_flush = 1'b0;
 		vp_en = 1'b0;
@@ -157,38 +166,43 @@ module hazard_controller (
 		else if(d_cache_req.valid && d_cache_req.mem_action == READ && ~vp_lock) begin
 			vp_en = 1'b1;
 			take_snapshot = 1'b1;
-			$display("Begin VP");
+			save_pc = 1'b1;
+			// $display("Holding onto VP_PC");
+			// $display("Begin VP");
 		end
 		else if(d_cache_req.valid && vp_lock) begin //second load/store request 
-			$display("2nd L/S request, flushing and stalling...");
+			// $display("2nd L/S request, flushing and stalling...");
 			ov_stall = 1'b1;
 			ov_flush = 1'b1;
 		end
 	end
 
-	// always @(predicted_value.valid) begin
-	// 	$display("Changing pv.valid %h %h", predicted_value.valid, predicted_value.data);
-	// end
-
 	always @(vp_lock) begin
 		ov_flush = 1'b0;
-		if(vp_lock) begin			 //Beginning of VP (prediction already outputed)
-			// $display("VP Locked"); 	//, and predicted value valid");
+		//reset_pc = 1'b0;
+		if(vp_lock) begin			 	//Beginning of VP (prediction already outputed)
+			//  $display("VP Locked"); 	//, and predicted value valid");
 			vp_en = 1'b0;
 		end
 		else begin
 			// $display("VP Unlocked"); 						
 			if(recover_snapshot) begin
-				$display("Flushing pipeline");
+				//ov_stall = 1'b1;
+				//reset_pc = 1'b1;
+				// $display("Flushing pipeline");
 				ov_flush = 1'b1;				//TODO: Find out if this turns off properly
 			end
-			// $display("Stall overrides off");
-			ov_stall = 1'b0;
+			// $display("Releasing VP_PC");
+			//$display("Stall overrides off");
+			//ov_stall = 1'b0;
+			save_pc = 1'b0;
+			
 		end
 	end
 
 	always_comb begin
 		if(rs_done) begin
+			snapshot_ack = 1'b1;
 			take_snapshot = 1'b0;
 		end
 	end
@@ -248,10 +262,14 @@ module hazard_controller (
 		end
 		if (dec_stall)
 			if_stall = 1'b1;
+		
 		if(if_stall_ov)
 			if_stall = 1'b1;
 		if(if_flush_ov)
 			if_flush = 1'b1;
+
+		if(if_stall_ov_off)
+			if_stall = 1'b0;
 	end
 
 	always_comb
@@ -310,11 +328,20 @@ module hazard_controller (
 	// Derive the load_pc
 	always_comb
 	begin
-		load_pc.we = dec_overload | ex_overload;
-		if (dec_overload)
-			load_pc.new_pc = dec_branch_decoded.target;
-		else
-			load_pc.new_pc = ex_branch_result.recovery_target;
+		if(recovery_done_ack) begin
+			load_pc.new_pc = pc_out + `ADDR_WIDTH'd4;
+			load_pc.we = 1'b1;
+			if_stall_ov_off = 1'b1;
+			// $display("Resetting PC to %h", load_pc.new_pc); //, stall status %h", pc_out, ov_stall);
+		end
+		else begin
+			if_stall_ov_off = 1'b0;
+			load_pc.we = dec_overload | ex_overload;
+			if (dec_overload)
+				load_pc.new_pc = dec_branch_decoded.target;
+			else
+				load_pc.new_pc = ex_branch_result.recovery_target;
+		end
 	end
 
 `ifdef SIMULATION
