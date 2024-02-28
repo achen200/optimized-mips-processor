@@ -134,12 +134,12 @@ module hazard_controller (
 		if_stall_ov = ov_stall;
 		dec_stall_ov = ov_stall;
 		ex_stall_ov = ov_stall;
-		mem_stall_ov = ov_stall;
+		//mem_stall_ov = ov_stall;
 
 		if_flush_ov = ov_flush;
 		dec_flush_ov = ov_flush;
 		ex_flush_ov = ov_flush;
-		mem_flush_ov = ov_flush;
+		//mem_flush_ov = ov_flush;
 	end
 
 	always @(d_cache_req.valid) begin
@@ -166,21 +166,24 @@ module hazard_controller (
 		end
 	end
 
+	// always @(predicted_value.valid) begin
+	// 	$display("Changing pv.valid %h %h", predicted_value.valid, predicted_value.data);
+	// end
+
 	always @(vp_lock) begin
 		ov_flush = 1'b0;
 		if(vp_lock) begin			 //Beginning of VP (prediction already outputed)
-			$display("VP Locked"); 	//, and predicted value valid");
+			// $display("VP Locked"); 	//, and predicted value valid");
 			vp_en = 1'b0;
 		end
-		else begin						//End of VP
-			$display("VP Unlocked"); 	//, predicted value invalid");
+		else begin
+			// $display("VP Unlocked"); 						
 			if(recover_snapshot) begin
 				$display("Flushing pipeline");
-				ov_flush = 1'b1;		//TODO: Find out if this turns off properly
+				ov_flush = 1'b1;				//TODO: Find out if this turns off properly
 			end
-			$display("Stall overrides off");
+			// $display("Stall overrides off");
 			ov_stall = 1'b0;
-			//$display("Current pc %h", load_pc.new_pc);
 		end
 	end
 

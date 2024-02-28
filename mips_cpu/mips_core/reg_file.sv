@@ -58,17 +58,18 @@ module reg_file (
 			done <= 1'b1;
 		else if(recovery_done_ack) begin //if ~d and recovery_done_ack 
 			done <= 1'b0;
-			$display("Done toggling off next cycle")
+			// $display("Done toggling off next cycle");
 		end
 	end
 	always @(recover_snapshot) begin
 		if(recover_snapshot) begin
+			// $display("Beginning recovery");
 			regs = regs_snapshot;
 			d = 1'b1;
-			$display("=========== Recovered Snapshot ============");
-			for(int i = 0; i < 32; i++)
-				$display("=== R[%d]: %h", i, regs[i]);
-			$display("==========================================");
+			// $display("=========== Recovered Snapshot ============");
+			// // for(int i = 0; i < 32; i++)
+			// // 	$display("=== R[%d]: %h", i, regs[i]);
+			// $display("==========================================");
 		end
 		else begin
 			d = 1'b0;

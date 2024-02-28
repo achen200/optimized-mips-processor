@@ -17,10 +17,10 @@ module register_snapshot (
 		if(take_snapshot) begin
 			regs = regs_in;
 			d = 1'b1;
-			$display("=========== Register Snapshot ============");
-			for(int i = 0; i < 32; i++)
-				$display("= S[%d]: %h", i, regs[i]);
-			$display("==========================================");
+			// $display("=========== Register Snapshot ============");
+			// for(int i = 0; i < 32; i++)
+			// 	$display("= S[%d]: %h", i, regs[i]);
+			// $display("==========================================");
 		end
 		else begin
 			d = 1'b0;

@@ -30,27 +30,23 @@ always_ff @(posedge clk) begin
 	en_recover <= next_en_recover;
 
 	if(recovery_done) begin
-		$display("VP: finished recovery, correct data is: %h", next_pred);
-		//if(done | recovery_done)
+		// $display("VP: Finished recovery");
 		recovery_done_ack <= 1'b1;
 		vp_lock_out <= 1'b0;
-		// out <= d_cache_data.data;			//Might have to change this
-		// out_valid <= d_cache_data.valid;	//should be valid right after recovery
 		out <= next_pred;
 		out_valid <= next_valid;
 	end
 	else if(~vp_en | done) begin
 		recovery_done_ack <= 1'b0;
-		//$display("Feeding normal d_cache_data");
 		if(done)
 			vp_lock_out <= 1'b0;
 		out <= d_cache_data.data;
 		out_valid <= d_cache_data.valid;
 	end
 	else if(vp_en) begin 
-		$display("VP_en Enabled");
 		recovery_done_ack <= 1'b0;
 		if(~vp_lock_out) begin //First prediction: save address and "last_predicted"
+			// $display("VP first prediction");
 			vp_lock_out <= 1'b1; 
 			last_predicted <= predicted;
 			last_predicted_pc <= addr;
@@ -62,27 +58,25 @@ always_ff @(posedge clk) begin
 	end			
 end
 
+always @(next_en_recover) begin
+	if(next_en_recover) begin
+		next_pred = d_cache_data.data;
+		next_valid = d_cache_data.valid;
+	end
+end
+
 always @(d_cache_data.valid) begin
 	next_en_recover = 1'b0;
 	next_done = 1'b0;
-	next_pred = d_cache_data.data;
-	next_valid = 1'b0;
-	//$display("next_pred changing");
 
 	if(d_cache_data.valid && d_cache_req.mem_action == READ) begin
 		if(d_cache_data.data != last_predicted) begin
 			next_en_recover = 1'b1;
-			//next_pred = d_cache_data.data;
-			next_valid = d_cache_data.valid;
 		end
 		else begin
-			//$display("Next_done on");
 			next_done = 1'b1;
-			//next_pred = d_cache_data.data;
-			next_valid = d_cache_data.valid;
 		end
 	end
-	//else $display("Next_done off");
 end
 
     
