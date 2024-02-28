@@ -115,6 +115,8 @@ module hazard_controller (
 	logic ov_stall, ov_flush;
 	logic output_vp;
 
+	logic [`ADDR_WIDTH - 1 : 0] restore_pc;
+
 	/*** Value Prediction ***/
 	assign predicted_value.data = pred;
 	assign predicted_value.valid = pred_valid;
@@ -163,6 +165,15 @@ module hazard_controller (
 			$display("2nd L/S request, flushing and stalling...");
 			ov_stall = 1'b1;
 			ov_flush = 1'b1;
+		end
+	end
+
+	always @ (vp_en) begin
+		if (vp_en) begin
+			restore_pc = ex_pc.pc;
+
+			$display("dec_pc: %h, ex_pc: %h", dec_pc.pc, ex_pc.pc);
+			$display("restore_pc: %h", restore_pc);
 		end
 	end
 
@@ -310,8 +321,12 @@ module hazard_controller (
 	// Derive the load_pc
 	always_comb
 	begin
-		load_pc.we = dec_overload | ex_overload;
-		if (dec_overload)
+		load_pc.we = dec_overload | ex_overload | recovery_done;
+		if (recovery_done) begin
+			load_pc.new_pc = restore_pc;
+			$display("Recovering pc, restore_pc: %h", restore_pc);
+		end
+		else if (dec_overload)
 			load_pc.new_pc = dec_branch_decoded.target;
 		else
 			load_pc.new_pc = ex_branch_result.recovery_target;
