@@ -66,7 +66,7 @@ module reg_file (
 			// $display("Beginning recovery");
 			regs = regs_snapshot;
 			d = 1'b1;
-			// $display("=========== Recovered Snapshot ============");
+			$display("=========== Recovered Snapshot ============");
 			// for(int i = 0; i < 32; i++)
 			// 	$display("=== R[%d]: %h", i, regs[i]);
 			// $display("==========================================");

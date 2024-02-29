@@ -333,6 +333,7 @@ module mips_core (
 		.dec_pc(i2d_pc),
 		.dec_branch_decoded,
 		.ex_pc(d2e_pc),
+		.mem_pc(e2m_pc),
 		.lw_hazard,
 		.ex_branch_result,
 		.mem_done,

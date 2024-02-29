@@ -3,7 +3,7 @@
 module value_prediction #(
     parameter INDEX_WIDTH = 6
 ) (
-    input clk, rst_n, vp_en, recovery_done,
+    input clk, rst_n, vp_en, recovery_done, out_lock_off,
     input [`ADDR_WIDTH - 1 : 0] addr,
 
     cache_output_ifc.in d_cache_data,
@@ -11,7 +11,7 @@ module value_prediction #(
 
     output [`DATA_WIDTH - 1 : 0] out, 
 	output [`ADDR_WIDTH - 1 : 0] last_predicted_pc,
-    output en_recover, done, vp_lock_out, out_valid, recovery_done_ack
+    output en_recover, done, vp_lock, out_valid, recovery_done_ack, out_lock
 );
 
 // Last predicted
@@ -32,24 +32,32 @@ always_ff @(posedge clk) begin
 	// if(en_recover & ~recovery_done_ack) $display("VP: incorrect prediction, triggering recovery");
 
 	if(recovery_done & ~recovery_done_ack) begin 
-		// $display("VP: Finished recovery");
+		// $display("VP: Finished recovery for %h, %h", last_predicted_pc, next_pred);
 		recovery_done_ack <= 1'b1;
-		vp_lock_out <= 1'b0;
+		vp_lock <= 1'b0;
 		out <= next_pred;
 		out_valid <= next_valid;
+		out_lock <= 1'b1;
+	end
+	else if(out_lock) begin
+		// $display("Stuck In Recovery Sequence");
+		recovery_done_ack <= 1'b0;
+		if(out_lock_off) begin
+			out_lock <= 1'b0;
+		end
 	end
 	else if(~vp_en | done) begin
 		recovery_done_ack <= 1'b0;
 		if(done)
-			vp_lock_out <= 1'b0;
+			vp_lock <= 1'b0;
 		out <= d_cache_data.data;
 		out_valid <= d_cache_data.valid;
 	end
 	else if(vp_en) begin 
 		recovery_done_ack <= 1'b0;
-		if(~vp_lock_out) begin //First prediction: save address and "last_predicted"
+		if(~vp_lock) begin //First prediction: save address and "last_predicted"
 			// $display("VP first prediction");
-			vp_lock_out <= 1'b1; 
+			vp_lock <= 1'b1; 
 			last_predicted <= predicted;
 			last_predicted_pc <= addr;
 			out <= predicted;
@@ -71,7 +79,7 @@ always @(d_cache_data.valid) begin
 	next_en_recover = 1'b0;
 	next_done = 1'b0;
 
-	if(d_cache_data.valid && d_cache_req.mem_action == READ) begin
+	if(d_cache_data.valid && d_cache_req.mem_action == READ && ~out_lock_off) begin
 		if(d_cache_data.data != last_predicted) begin
 			next_en_recover = 1'b1;
 		end

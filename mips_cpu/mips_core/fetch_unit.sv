@@ -49,6 +49,8 @@ module fetch_unit (
 		else
 		begin
 			o_pc_current.pc <= o_pc_next.pc;
+			// $display("Current PC: %h", o_pc_current.pc);
+			// $display("Next PC: %h Stall %b", o_pc_next.pc, i_hc.stall);
 		end
 	end
 
