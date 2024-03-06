@@ -110,6 +110,8 @@ module mips_core (
 	logic [`DATA_WIDTH-1:0] r_to_s [32];
 	logic [`DATA_WIDTH-1:0] s_to_r [32];
 
+	d_cache_input_ifc dc_req_out();
+
 	// xxxx Memory
 	axi_write_address axi_write_address();
 	axi_write_data axi_write_data();
@@ -282,7 +284,7 @@ module mips_core (
 	d_cache D_CACHE (
 		.clk, .rst_n,
 
-		.in(e2m_d_cache_input),
+		.in(dc_req_out),
 		.out(mem_d_cache_output),
 
 		.mem_read_address(mem_read_address[1]),
@@ -303,8 +305,7 @@ module mips_core (
 		.i_d_cache_output      (predicted_value),
 		.i_d_cache_pass_through(e2m_d_cache_pass_through),
 		.o_done                (mem_done),
-		.o_write_back          (mem_write_back),
-		.predicted_value
+		.o_write_back          (mem_write_back)
 	);
 
 	// ========================================================================
@@ -337,6 +338,8 @@ module mips_core (
 		.lw_hazard,
 		.ex_branch_result,
 		.mem_done,
+		.ex_ctl      (d2e_alu_pass_through),
+		.dc_pass (ex_d_cache_pass_through),
 
 		.i2i_hc,
 		.i2d_hc,
@@ -351,7 +354,8 @@ module mips_core (
 		.r_to_s,
 		.d_cache_output(mem_d_cache_output),
 		.predicted_value,
-		.d_cache_req(e2m_d_cache_input)
+		.ex_req_in(e2m_d_cache_input), 
+		.dc_req_out
 	);
 
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -410,6 +414,7 @@ module mips_core (
 			* If an instruction goes into d2e pipeline register and is not a
 			* nop, we count it as an instruction we executed.
 			*/
+		// $display("Inside MIPS Core: i2d_stall %b e2m_hc_stall %b", i2d_hc.stall, e2m_hc.stall);
 		if (!i2d_hc.stall
 			&& !d2e_hc.flush
 			&& dec_decoder_output.valid

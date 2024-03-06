@@ -3,7 +3,7 @@
 module value_prediction #(
     parameter INDEX_WIDTH = 6
 ) (
-    input clk, rst_n, vp_en, recovery_done, out_lock_off,
+    input clk, rst_n, vp_en, recovery_done, recover_en,
     input [`ADDR_WIDTH - 1 : 0] addr,
 
     cache_output_ifc.in d_cache_data,
@@ -11,14 +11,13 @@ module value_prediction #(
 
     output [`DATA_WIDTH - 1 : 0] out, 
 	output [`ADDR_WIDTH - 1 : 0] last_predicted_pc,
-    output en_recover, done, vp_lock, out_valid, recovery_done_ack, out_lock
+    output recover, vp_lock, out_valid,
+	output done 	//Only high when correct prediction
 );
 
 // Last predicted
 logic [`DATA_WIDTH - 1 : 0] last_predicted;
 logic [`DATA_WIDTH - 1 : 0] predicted;
-logic [`DATA_WIDTH - 1 : 0] next_pred; 
-logic next_done, next_en_recover, next_valid;
 
 // Make prediction
 always_comb begin
@@ -26,40 +25,24 @@ always_comb begin
 end
 
 always_ff @(posedge clk) begin
-	done <= next_done;
-	en_recover <= next_en_recover;
-	// if(done) $display("VP: correct prediction, no need for recovery");
-	// if(en_recover & ~recovery_done_ack) $display("VP: incorrect prediction, triggering recovery");
+	$display("-------------------------- CLK --------------------------- recover %b", recover);
 
-	if(recovery_done & ~recovery_done_ack) begin 
-		// $display("VP: Finished recovery for %h, %h", last_predicted_pc, next_pred);
-		recovery_done_ack <= 1'b1;
+	if(recovery_done) begin 
 		vp_lock <= 1'b0;
-		out <= next_pred;
-		out_valid <= next_valid;
-		out_lock <= 1'b1;
+		$display("VP: lock disabled next cycle");
 	end
-	else if(out_lock) begin
-		// $display("Stuck In Recovery Sequence");
-		recovery_done_ack <= 1'b0;
-		if(out_lock_off) begin
-			out_lock <= 1'b0;
-		end
-	end
-	else if(~vp_en | done) begin
-		recovery_done_ack <= 1'b0;
-		if(done)
-			vp_lock <= 1'b0;
+	else if(~vp_en) begin // | done
 		out <= d_cache_data.data;
 		out_valid <= d_cache_data.valid;
 	end
 	else if(vp_en) begin 
-		recovery_done_ack <= 1'b0;
 		if(~vp_lock) begin //First prediction: save address and "last_predicted"
-			// $display("VP first prediction");
+			$display("VP first prediction");
 			vp_lock <= 1'b1; 
+			done <= 1'b0;
 			last_predicted <= predicted;
 			last_predicted_pc <= addr;
+			$display("ADDR: %h data %h", addr, predicted);
 			out <= predicted;
 			out_valid <= 1'b1; 	//Prediction only valid for first cycle
 		end
@@ -68,24 +51,28 @@ always_ff @(posedge clk) begin
 	end			
 end
 
-always @(next_en_recover) begin
-	if(next_en_recover) begin
-		next_pred = d_cache_data.data;
-		next_valid = d_cache_data.valid;
+logic ren_recover;	//Only run once per cache valid read
+
+always_ff @(posedge clk) begin
+	if(d_cache_data.valid && recover_en) begin	
+		$display("REQ valid changing: valid %b action %b", d_cache_req.valid, d_cache_req.mem_action);
+		ren_recover <= 1'b0;
+		if(ren_recover) begin
+			if(d_cache_data.data != last_predicted) begin
+				$display("VP: Incorrect prediction detected, recovery begins next cycle");
+				recover <= 1'b1;
+			end
+			else begin
+				$display("VP: Prediction correct detected, no need to recover, lock disabled next cycle");
+				vp_lock <= 1'b0;
+				done <= 1'b1;
+				out_valid <= 1'b0;
+			end
+		end //Assuming d_cache_data.valid only on for 1 cycle, if not, need an else for recover <= 1'b0;
 	end
-end
-
-always @(d_cache_data.valid) begin
-	next_en_recover = 1'b0;
-	next_done = 1'b0;
-
-	if(d_cache_data.valid && d_cache_req.mem_action == READ && ~out_lock_off) begin
-		if(d_cache_data.data != last_predicted) begin
-			next_en_recover = 1'b1;
-		end
-		else begin
-			next_done = 1'b1;
-		end
+	else begin
+		ren_recover <= 1'b1;
+		recover <= 1'b0;
 	end
 end
 
