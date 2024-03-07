@@ -54,8 +54,9 @@ module reg_file (
 			regs <= regs_snapshot;
 			done <= 1'b1;					
 		end
-		else if(i_wb.uses_rw) begin
-			regs[i_wb.rw_addr] <= i_wb.rw_data;	
+		else begin
+			if(i_wb.uses_rw)
+				regs[i_wb.rw_addr] <= i_wb.rw_data;	
 			done <= 1'b0;
 		end
 		

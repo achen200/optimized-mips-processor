@@ -123,7 +123,7 @@ module hazard_controller (
 	logic output_vp;
 	logic save_pc;
 
-	logic pc_out;
+	logic [`DATA_WIDTH-1:0] pc_out;
 
 	/*** Value Prediction ***/
 	assign predicted_value.data = pred;
@@ -147,7 +147,7 @@ module hazard_controller (
 		dec_stall_ov = ov_stall;
 		ex_stall_ov = ov_stall;
 		mem_stall_ov = ov_stall;
-		//wb_stall_ov = ov_stall;
+		wb_stall_ov = ov_stall;
 
 		if_flush_ov = ov_flush;
 		dec_flush_ov = ov_flush;
@@ -167,13 +167,13 @@ module hazard_controller (
 
 	//Handle when cache_request is stored
 	always_comb begin
-		if(vp_lock | vp_en) begin
+		if(vp_lock | vp_en | ov_stall) begin
 			dc_req_out.valid = imm_dc_req.valid;
 			dc_req_out.mem_action = imm_dc_req.mem_action;
 			dc_req_out.addr = imm_dc_req.addr;
 			dc_req_out.addr_next = imm_dc_req.addr_next;
 			dc_req_out.data = imm_dc_req.data;
-			$display("dc_req_out1: valid %b addr %h", dc_req_out.valid, dc_req_out.addr);
+			// $display("dc_req_out1: valid %b addr %h", dc_req_out.valid, dc_req_out.addr);
 		end
 		else begin
 			dc_req_out.valid = ex_req_in.valid;
@@ -181,10 +181,12 @@ module hazard_controller (
 			dc_req_out.addr = ex_req_in.addr;
 			dc_req_out.addr_next = ex_req_in.addr_next;
 			dc_req_out.data = ex_req_in.data;
-			$display("dc_req_out2: valid %b addr %h", ex_req_in.valid, dc_req_out.addr);
+			// $display("dc_req_out2: valid %b addr %h vp_lock %b vp_en %b", ex_req_in.valid, dc_req_out.addr, vp_lock, vp_en);
 		end
 	end
 
+	//Need to have a cooldown of 1 cycle to let d_cache_output 
+	logic cooldown;
 	always_ff @(posedge clk) begin
 		if(first_lmiss) begin
 			// $display("Immediate assigned");
@@ -198,35 +200,39 @@ module hazard_controller (
 	end
 
 
-	logic next;
+	logic next, flushed;
 	logic first_lmiss;
 	assign first_lmiss = ex_req_in.valid && ex_req_in.mem_action == READ && ~vp_lock && ~d_cache_output.valid & ~next;
 	// logic n_off;
 	always_ff @(posedge clk) begin
-		$display("if_stall %b dec_stall %b == i2d_stall %b ex_stall %b mem_stall %b", if_stall, dec_stall, i2d_hc.stall, ex_stall, mem_stall);
-			
+		// $display("if_stall %b dec_stall %b == i2d_stall %b ex_stall %b mem_stall %b", if_stall, dec_stall, i2d_hc.stall, ex_stall, mem_stall);
+		// if(ex_req_in.valid & ex_req_in.mem_action == READ)
+		// 	$display("~VP_lock %b, ~d_cache_output.valid %b, ~next %b", ~vp_lock, ~d_cache_output.valid, ~next);
 		if(~vp_lock & vp_done & ov_stall) begin	// 
 			$display("VP1 resolved correct, continuing at checkpoint");
 			ov_stall <= 1'b0;
+			recover_en <= 1'b0;
 		end
 		if(recover_snapshot) begin //If predicted incorrect --FLUSH
 			recover_en <= 1'b0; 
-			$display("Recover_en disabled next cycle");
+			if_stall_ov_off <= 1'b1;
+			dec_stall_ov_off <= 1'b1;
+			ex_stall_ov_off <= 1'b1;
+			mem_stall_ov_off <= 1'b1;
+			ov_flush <= 1'b1;
+			flushed <= 1'b1;
+			$display("Flushing pipeline");
 		end
-		// if(d_cache_output.valid & ov_stall) begin
-		// 	$display("Stalling done next cycle");
-		// 	ov_stall <= 1'b0;
-		// end
-		// if(n_off) begin
-		// 	if(~d_cache_output.valid)	
-		// 		ov_stall <= 1'b1; 
-		// 	if_stall_ov_off <= 1'b0;
-		// 	dec_stall_ov_off <= 1'b0;
-		// 	ex_stall_ov_off <= 1'b0;
-		// 	mem_stall_ov_off <= 1'b0;
-		// 	ov_flush <= 1'b0;
-		// 	n_off <= 1'b0;
-		// end
+		if(flushed) begin
+			if_stall_ov_off <= 1'b0;
+			dec_stall_ov_off <= 1'b0;
+			ex_stall_ov_off <= 1'b0;
+			mem_stall_ov_off <= 1'b0;
+			ov_flush <= 1'b0;
+			flushed <= 1'b0;
+			$display("Done Flushing");
+			ov_stall <= 1'b0;
+		end
 
 		if(next) begin
 			vp_en <= 1'b0;
@@ -247,12 +253,6 @@ module hazard_controller (
 		if (dc_pass.is_mem_access & vp_lock) begin // && vp_lock // Works if i_decoded changes by the time vp_lock turn on for VP1
 			$display("Additional L/S detected");
 			$display("2nd VP on %h", ex_pc.pc);
-			// if_stall_ov_off <= 1'b1;
-			// dec_stall_ov_off <= 1'b1;
-			// ex_stall_ov_off <= 1'b1;
-			// mem_stall_ov_off <= 1'b1;
-			// ov_flush <= 1'b1;
-			// n_off <= 1'b1; //Next flush off
 			ov_stall <= 1'b1;
 		end
 	end
@@ -390,19 +390,19 @@ module hazard_controller (
 		e2m_hc.flush = ex_flush;
 		e2m_hc.stall = mem_stall;
 		m2w_hc.flush = mem_flush;
-		m2w_hc.stall = 1'b0; //wb_stall_ov;
+		m2w_hc.stall = wb_stall_ov?1'b1:1'b0;
 	end
 	
 
 	// Derive the load_pc	
 	always_comb
 	begin
-		if(recover_snapshot) begin
+		if(flushed) begin
 			load_pc.new_pc = pc_out;
 			load_pc.we = 1'b1;
 			// if_stall_ov_off = 1'b1;
 			//ov_flush = 1'b1;
-			$display("Resetting PC to %h", load_pc.new_pc); //Stall %b Flush %b", load_pc.new_pc, if_stall, if_flush);
+			$display("Resetting PC to %h | %h", load_pc.new_pc, pc_out); //Stall %b Flush %b", load_pc.new_pc, if_stall, if_flush);
 		end
 		else begin
 			//ov_flush = 1'b1;

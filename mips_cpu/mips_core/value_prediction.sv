@@ -16,7 +16,7 @@ module value_prediction #(
 );
 
 // Last predicted
-logic [`DATA_WIDTH - 1 : 0] last_predicted;
+logic [`ADDR_WIDTH - 1 : 0] last_predicted;
 logic [`DATA_WIDTH - 1 : 0] predicted;
 
 // Make prediction
@@ -25,7 +25,7 @@ always_comb begin
 end
 
 always_ff @(posedge clk) begin
-	$display("-------------------------- CLK --------------------------- recover %b", recover);
+	// $display("-------------------------- CLK --------------------------- recover %b", recover);
 
 	if(recovery_done) begin 
 		vp_lock <= 1'b0;
@@ -54,7 +54,7 @@ end
 logic ren_recover;	//Only run once per cache valid read
 
 always_ff @(posedge clk) begin
-	if(d_cache_data.valid && recover_en) begin	
+	if(d_cache_data.valid & recover_en) begin	
 		$display("REQ valid changing: valid %b action %b", d_cache_req.valid, d_cache_req.mem_action);
 		ren_recover <= 1'b0;
 		if(ren_recover) begin
@@ -63,12 +63,15 @@ always_ff @(posedge clk) begin
 				recover <= 1'b1;
 			end
 			else begin
-				$display("VP: Prediction correct detected, no need to recover, lock disabled next cycle");
+				$display("VP: Prediction correct detected, no need to recover, lock disabled next cycle | lock %b", vp_lock);
 				vp_lock <= 1'b0;
 				done <= 1'b1;
 				out_valid <= 1'b0;
 			end
 		end //Assuming d_cache_data.valid only on for 1 cycle, if not, need an else for recover <= 1'b0;
+		else begin
+			recover <= 1'b0;
+		end
 	end
 	else begin
 		ren_recover <= 1'b1;
