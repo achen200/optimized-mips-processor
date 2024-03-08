@@ -22,8 +22,8 @@ interface reg_file_output_ifc ();
 endinterface
 
 module reg_file (
-	input clk,    // Clock
-
+	input clk, 
+	
 	// Input from decoder
 	decoder_output_ifc.in i_decoded,
 
@@ -32,7 +32,7 @@ module reg_file (
 
 	// Output data
 	reg_file_output_ifc.out out,
-	input recover_snapshot, recovery_done_ack,
+	input recover_snapshot,
 	input  [`DATA_WIDTH-1:0] regs_snapshot[32],
 	output [`DATA_WIDTH-1:0] regs_out[32],
 	output logic done
@@ -47,10 +47,7 @@ module reg_file (
 
 	always_ff @(posedge clk) begin
 		if(recover_snapshot) begin
-			$display("=========== Recovered Snapshot ============");
-			// for(int i = 0; i < 32; i++)
-			// 	$display("=== R[%d]: %h", i, regs_snapshot[i]);
-			// $display("==========================================");
+			// $display("=========== Recovered Snapshot ============");
 			regs <= regs_snapshot;
 			done <= 1'b1;					
 		end

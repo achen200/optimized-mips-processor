@@ -18,16 +18,12 @@ module register_snapshot (
 		if(ts && ~done) begin 
 			regs <= regs_in;
 			done <= 1'b1;
-			$display("=========== Register Snapshot ============");
-			// for(int i = 0; i < 32; i++)
-			// 	$display("= S[%d]: %h", i, regs_in[i]);
-			// $display("==========================================");
+			// $display("=========== Register Snapshot ============");
 		end
 		else begin 
 			done <= 1'b0;
 		end
 	end
-
 
 	assign regs_snapshot = regs;
     

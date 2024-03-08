@@ -40,7 +40,6 @@ module pr_i2d (
 			begin
 				if (i_hc.flush)
 				begin
-					// $display("Flushing i2d");
 					o_pc.pc <= '0;
 					o_inst.valid <= 1'b0;
 					o_inst.data <= '0;
@@ -102,7 +101,6 @@ module pr_d2e (
 			begin
 				if (i_hc.flush)
 				begin
-					// $display("Flushing d2e");
 					o_pc.pc <= '0;
 
 					o_alu_input.valid <= '0;
@@ -175,8 +173,6 @@ module pr_e2m (
 
 	always_ff @(posedge clk)
 	begin
-		// $display("PC %h: mem_access %b uses_rw %b addr %h | rst_n %b stall %b flush %b", 
-			// o_pc.pc, o_d_cache_pass_through.is_mem_access,  o_d_cache_pass_through.uses_rw, o_d_cache_pass_through.rw_addr, ~rst_n, i_hc.stall, i_hc.flush);
 		if(~rst_n)
 		begin
 			o_pc.pc <= '0;
@@ -197,7 +193,6 @@ module pr_e2m (
 			begin
 				if (i_hc.flush)
 				begin
-					$display("Flushing e2m");
 					o_pc.pc <= '0;
 
 					o_d_cache_input.valid <= 1'b0;
@@ -254,7 +249,6 @@ module pr_m2w (
 			begin
 				if (i_hc.flush)
 				begin
-					// $display("Flushing mw2");
 					o_wb.uses_rw <= 1'b0;
 					o_wb.rw_addr <= zero;
 					o_wb.rw_data <= '0;

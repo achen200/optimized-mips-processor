@@ -106,7 +106,7 @@ module mips_core (
 	hazard_control_ifc m2w_hc();
 	load_pc_ifc load_pc();
 	logic recover_snapshot;
-	logic recovery_done, recovery_done_ack;
+	logic recovery_done;
 	logic [`DATA_WIDTH-1:0] r_to_s [32];
 	logic [`DATA_WIDTH-1:0] s_to_r [32];
 
@@ -197,7 +197,6 @@ module mips_core (
 
 	reg_file REG_FILE(
 		.clk,
-		.recovery_done_ack,
 		.i_decoded(dec_decoder_output),
 		.i_wb(m2w_write_back), // WB stage
 		.recover_snapshot(recover_snapshot),
@@ -349,7 +348,6 @@ module mips_core (
 		.load_pc,
 		.recover_snapshot,
 		.recovery_done,
-		.recovery_done_ack,
 		.s_to_r,
 		.r_to_s,
 		.d_cache_output(mem_d_cache_output),

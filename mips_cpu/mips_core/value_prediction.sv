@@ -3,7 +3,8 @@
 module value_prediction #(
     parameter INDEX_WIDTH = 6
 ) (
-    input clk, rst_n, vp_en, recovery_done, recover_en,
+    input clk, rst_n,
+	input vp_en, recovery_done, recover_en,
     input [`ADDR_WIDTH - 1 : 0] addr,
 
     cache_output_ifc.in d_cache_data,
@@ -25,24 +26,20 @@ always_comb begin
 end
 
 always_ff @(posedge clk) begin
-	// $display("-------------------------- CLK --------------------------- recover %b", recover);
-
 	if(recovery_done) begin 
 		vp_lock <= 1'b0;
-		// $display("VP: lock disabled next cycle");
 	end
-	else if(~vp_en) begin // | done
+	else if(~vp_en) begin
 		out <= d_cache_data.data;
 		out_valid <= d_cache_data.valid;
 	end
 	else if(vp_en) begin 
 		if(~vp_lock) begin //First prediction: save address and "last_predicted"
-			// $display("VP first prediction");
 			vp_lock <= 1'b1; 
 			done <= 1'b0;
 			last_predicted <= predicted;
 			last_predicted_pc <= addr;
-			$display("ADDR: %h data %h", addr, predicted);
+			$display("VP: PC %h data %h", addr, predicted);
 			out <= predicted;
 			out_valid <= 1'b1; 	//Prediction only valid for first cycle
 		end
@@ -51,30 +48,27 @@ always_ff @(posedge clk) begin
 	end			
 end
 
-logic ren_recover;	//Only run once per cache valid read
+logic first;	//Only run once per cache valid read
 
 always_ff @(posedge clk) begin
 	if(d_cache_data.valid & recover_en) begin	
-		// $display("REQ valid changing: valid %b action %b", d_cache_req.valid, d_cache_req.mem_action);
-		ren_recover <= 1'b0;
-		if(ren_recover) begin
+		first <= 1'b0;
+		if(first) begin
 			if(d_cache_data.data != last_predicted) begin
 				$display("VP: Incorrect prediction detected, recovery begins next cycle");
 				recover <= 1'b1;
 			end
 			else begin
-				$display("VP: Prediction correct detected, no need to recover, lock disabled next cycle | lock %b", vp_lock);
+				$display("VP: Prediction correct detected, no need to recover");
 				vp_lock <= 1'b0;
 				done <= 1'b1;
 				out_valid <= 1'b0;
 			end
-		end //Assuming d_cache_data.valid only on for 1 cycle, if not, need an else for recover <= 1'b0;
-		else begin
-			recover <= 1'b0;
-		end
+		end 
+		else recover <= 1'b0;
 	end
 	else begin
-		ren_recover <= 1'b1;
+		first <= 1'b1;
 		recover <= 1'b0;
 	end
 end
