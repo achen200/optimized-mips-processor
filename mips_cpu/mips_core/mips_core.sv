@@ -339,7 +339,7 @@ module mips_core (
 		.ex_branch_result,
 		.mem_done,
 		.ex_ctl      (d2e_alu_pass_through),
-		.dc_pass (ex_d_cache_pass_through),
+		.dec_pass (dec_alu_pass_through),
 
 		.i2i_hc,
 		.i2d_hc,

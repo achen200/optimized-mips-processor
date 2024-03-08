@@ -25,7 +25,7 @@ module hazard_controller (
 	// Feedback from DEC
 	pc_ifc.in dec_pc,
 	branch_decoded_ifc.hazard dec_branch_decoded,
-	d_cache_pass_through_ifc.in dc_pass,
+	alu_pass_through_ifc.in dec_pass,
 	// Feedback from EX
 	pc_ifc.in ex_pc,
 	input lw_hazard,
@@ -85,7 +85,7 @@ module hazard_controller (
 		.vp_en, .recover_en,
 		.addr(vp_pc),
 		.d_cache_data(d_cache_output),
-		.d_cache_req(ex_req_in),
+		.d_cache_req(dc_req), // .d_cache_req(ex_req_in),
 		.recover(recover_snapshot),
 		.out(pred), 
 		.out_valid(pred_valid),
@@ -115,30 +115,29 @@ module hazard_controller (
 	// i.e. any data goes to wb is finalized and waiting to be commited
 
 	//Stall overrides
-	logic if_stall_ov, if_flush_ov, if_stall_ov_off, dec_stall_ov_off, ex_stall_ov_off, mem_stall_ov_off; 
-	logic dec_stall_ov, dec_flush_ov;
-	logic ex_stall_ov, ex_flush_ov;
-	logic mem_stall_ov, mem_flush_ov, wb_stall_ov;
+	logic if_stall_ov, if_flush_ov, if_stall_ov_off; 
+	logic dec_stall_ov, dec_flush_ov, dec_stall_ov_off;
+	logic ex_stall_ov, ex_flush_ov, ex_stall_ov_off;
+	logic mem_stall_ov, mem_flush_ov, mem_stall_ov_off, wb_stall_ov;
 	logic ov_stall, ov_flush;
+	
 	logic output_vp;
-	logic save_pc;
-
 	logic [`DATA_WIDTH-1:0] pc_out;
 
 	/*** Value Prediction ***/
-	assign predicted_value.data = pred;
-	assign predicted_value.valid = pred_valid;
+	// assign predicted_value.data = pred;
+	// assign predicted_value.valid = pred_valid;
 
 	always_comb begin
 		if(output_vp) begin
 			predicted_value.data = pred;
 			predicted_value.valid = pred_valid;
-			// $display("Using predicted values %h valid %b", pred, pred_valid);
+			//$display("Using predicted values %h valid %b", pred, pred_valid);
 		end
 		else begin
 			predicted_value.data = d_cache_output.data;
 			predicted_value.valid = d_cache_output.valid;
-			// $display("Using d_cache values %h valid %b", d_cache_output.data, d_cache_output.valid);
+			//$display("Using d_cache values %h valid %b", d_cache_output.data, d_cache_output.valid);
 		end
 	end
 
@@ -147,41 +146,64 @@ module hazard_controller (
 		dec_stall_ov = ov_stall;
 		ex_stall_ov = ov_stall;
 		mem_stall_ov = ov_stall;
-		wb_stall_ov = ov_stall;
+		//wb_stall_ov = ov_stall;
 
 		if_flush_ov = ov_flush;
 		dec_flush_ov = ov_flush;
 		ex_flush_ov = ov_flush;
-		mem_flush_ov = ov_flush;	
+		mem_flush_ov = ov_flush;
+
+		if_stall_ov_off = ov_flush;
+		dec_stall_ov_off = ov_flush;
+		ex_stall_ov_off = ov_flush;
+		mem_stall_ov_off = ov_flush;
 	end
 
 	//Handle stores - immediate execute
 	always_comb begin
-		if(ex_req_in.valid & (vp_lock | (ex_req_in.mem_action == READ & ~d_cache_output.valid)))
+		if(dc_req.valid & (vp_lock | (dc_req.mem_action == READ & ~d_cache_output.valid)))
 			output_vp = 1'b1;
 		else
 			output_vp = 1'b0;
 	end
 
 	d_cache_input_ifc imm_dc_req();
+	d_cache_input_ifc dc_req();
+	always_comb begin
+		dc_req_out.valid = dc_req.valid;
+		dc_req_out.mem_action = dc_req.mem_action;
+		dc_req_out.addr = dc_req.addr;
+		dc_req_out.addr_next = dc_req.addr_next;
+		dc_req_out.data = dc_req.data;
+	end
 
 	//Handle when cache_request is stored
 	always_comb begin
 		if(vp_lock | vp_en | ov_stall) begin
-			dc_req_out.valid = imm_dc_req.valid;
-			dc_req_out.mem_action = imm_dc_req.mem_action;
-			dc_req_out.addr = imm_dc_req.addr;
-			dc_req_out.addr_next = imm_dc_req.addr_next;
-			dc_req_out.data = imm_dc_req.data;
-			// $display("dc_req_out1: valid %b addr %h", dc_req_out.valid, dc_req_out.addr);
+			dc_req.valid = imm_dc_req.valid;
+			dc_req.mem_action = imm_dc_req.mem_action;
+			dc_req.addr = imm_dc_req.addr;
+			dc_req.addr_next = imm_dc_req.addr_next;
+			dc_req.data = imm_dc_req.data;
+			// $display("dc_req1: valid %b addr %h", dc_req.valid, dc_req.addr);
+			// dc_req_out.valid = imm_dc_req.valid;
+			// dc_req_out.mem_action = imm_dc_req.mem_action;
+			// dc_req_out.addr = imm_dc_req.addr;
+			// dc_req_out.addr_next = imm_dc_req.addr_next;
+			// dc_req_out.data = imm_dc_req.data;
 		end
 		else begin
-			dc_req_out.valid = ex_req_in.valid;
-			dc_req_out.mem_action = ex_req_in.mem_action;
-			dc_req_out.addr = ex_req_in.addr;
-			dc_req_out.addr_next = ex_req_in.addr_next;
-			dc_req_out.data = ex_req_in.data;
-			// $display("dc_req_out2: valid %b addr %h vp_lock %b vp_en %b", ex_req_in.valid, dc_req_out.addr, vp_lock, vp_en);
+			dc_req.valid = ex_req_in.valid;
+			dc_req.mem_action = ex_req_in.mem_action;
+			dc_req.addr = ex_req_in.addr;
+			dc_req.addr_next = ex_req_in.addr_next;
+			dc_req.data = ex_req_in.data;
+			// $display("dc_req2: valid %b addr %h vp_lock %b vp_en %b", ex_req_in.valid, dc_req.addr, vp_lock, vp_en);
+			// dc_req_out.valid = ex_req_in.valid;
+			// dc_req_out.mem_action = ex_req_in.mem_action;
+			// dc_req_out.addr = ex_req_in.addr;
+			// dc_req_out.addr_next = ex_req_in.addr_next;
+			// dc_req_out.data = ex_req_in.data;
 		end
 	end
 
@@ -189,51 +211,48 @@ module hazard_controller (
 	logic cooldown;
 	always_ff @(posedge clk) begin
 		if(first_lmiss) begin
-			// $display("Immediate assigned");
 			imm_dc_req.valid = ex_req_in.valid;
 			imm_dc_req.mem_action = ex_req_in.mem_action;
 			imm_dc_req.addr = ex_req_in.addr;
-			imm_dc_req.addr_next = ex_req_in.addr_next;
+			imm_dc_req.addr_next = ex_req_in.addr;
 			imm_dc_req.data = ex_req_in.data;
-			$display("immediate: valid %b mem_action %b addr %h", imm_dc_req.valid, imm_dc_req.mem_action, imm_dc_req.addr);
+			// $display("New immediate: valid %b mem_action %b addr %h next %h", imm_dc_req.valid, imm_dc_req.mem_action, imm_dc_req.addr, imm_dc_req.addr_next);
 		end
 	end
 
 
 	logic next, flushed;
 	logic first_lmiss;
+	// logic vp2;
 	assign first_lmiss = ex_req_in.valid && ex_req_in.mem_action == READ && ~vp_lock && ~d_cache_output.valid & ~next;
-	// logic n_off;
+
 	always_ff @(posedge clk) begin
-		// $display("if_stall %b dec_stall %b == i2d_stall %b ex_stall %b mem_stall %b", if_stall, dec_stall, i2d_hc.stall, ex_stall, mem_stall);
-		// if(ex_req_in.valid & ex_req_in.mem_action == READ)
-		// 	$display("~VP_lock %b, ~d_cache_output.valid %b, ~next %b", ~vp_lock, ~d_cache_output.valid, ~next);
 		if(~vp_lock & vp_done & ov_stall) begin	// 
-			$display("VP1 resolved correct, continuing at checkpoint");
+			// $display("==== VP1 resolved correct, continuing from checkpoint");
 			ov_stall <= 1'b0;
 			recover_en <= 1'b0;
 		end
 		if(recover_snapshot) begin //If predicted incorrect --FLUSH
 			recover_en <= 1'b0; 
-			if_stall_ov_off <= 1'b1;
-			dec_stall_ov_off <= 1'b1;
-			ex_stall_ov_off <= 1'b1;
-			mem_stall_ov_off <= 1'b1;
 			ov_flush <= 1'b1;
 			flushed <= 1'b1;
-			$display("Flushing pipeline");
+			// $display("Flushing pipeline...");
 		end
 		if(flushed) begin
-			if_stall_ov_off <= 1'b0;
-			dec_stall_ov_off <= 1'b0;
-			ex_stall_ov_off <= 1'b0;
-			mem_stall_ov_off <= 1'b0;
 			ov_flush <= 1'b0;
 			flushed <= 1'b0;
-			$display("Done Flushing");
+			// $display("Done flushing");
 			ov_stall <= 1'b0;
+			cooldown <= 1'b1; //For deub purposes only
 		end
-
+		if(cooldown) begin
+			cooldown <= 1'b0;
+			// $display("---- Post Flush Logs ---- ");
+			// $display("imm/ex %b, output_vp %b", vp_lock|vp_en|ov_stall, output_vp);
+			// $display("ex_valid %b, ex_addr %h", ex_req_in.valid, ex_req_in.addr);
+			// $display("dc_req_valid %b, dc_req_addr %h", dc_req.valid, dc_req.addr);
+			// $display("---- PFL Done ---- ");
+		end
 		if(next) begin
 			vp_en <= 1'b0;
 			take_snapshot <= 1'b0;
@@ -242,18 +261,20 @@ module hazard_controller (
  
 		//Handle load miss  
 		if(first_lmiss) begin	 
-			$display("VP begin next cycle %b", ex_req_in.valid);
-			$display("VP_PC %h", mem_pc.pc);
+			$display("==== VP begin next cycle");
+			// $display("-- VP_PC %h", mem_pc.pc);
 			vp_pc <= mem_pc.pc;
 			vp_en <= 1'b1;
 			take_snapshot <= 1'b1; 
 			recover_en <= 1'b1;
 			next <= 1'b1;
 		end
-		if (dc_pass.is_mem_access & vp_lock) begin // && vp_lock // Works if i_decoded changes by the time vp_lock turn on for VP1
-			$display("Additional L/S detected");
-			$display("2nd VP on %h", ex_pc.pc);
-			ov_stall <= 1'b1;
+		if (ex_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin // && vp_lock // Works if i_decoded changes by the time vp_lock turn on for VP1
+			$display("==== VP2 on %h", ex_pc.pc);
+			// $display("-- Output_vp %b imm/ex %b", output_vp, vp_lock | vp_en | ov_stall);
+			// $display("-- IMM_valid %b mem_action %b addr %h next %h", imm_dc_req.valid, imm_dc_req.mem_action, imm_dc_req.addr, imm_dc_req.addr_next);
+			// $display("-- if_stall %b dec_stall %b ex_stall %b mem_stall %b", if_stall, dec_stall, ex_stall, mem_stall);
+			ov_stall <= 1'b1;	//Stalls one cycle too late...
 		end
 	end
 
@@ -402,11 +423,9 @@ module hazard_controller (
 			load_pc.we = 1'b1;
 			// if_stall_ov_off = 1'b1;
 			//ov_flush = 1'b1;
-			$display("Resetting PC to %h | %h", load_pc.new_pc, pc_out); //Stall %b Flush %b", load_pc.new_pc, if_stall, if_flush);
+			$display("Resetting PC to %h", load_pc.new_pc); //Stall %b Flush %b", load_pc.new_pc, if_stall, if_flush);
 		end
 		else begin
-			//ov_flush = 1'b1;
-			// if_stall_ov_off = 1'b0;
 			load_pc.we = dec_overload | ex_overload;
 			if (dec_overload)
 				load_pc.new_pc = dec_branch_decoded.target;

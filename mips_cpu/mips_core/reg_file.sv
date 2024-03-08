@@ -48,9 +48,9 @@ module reg_file (
 	always_ff @(posedge clk) begin
 		if(recover_snapshot) begin
 			$display("=========== Recovered Snapshot ============");
-			for(int i = 0; i < 32; i++)
-				$display("=== R[%d]: %h", i, regs_snapshot[i]);
-			$display("==========================================");
+			// for(int i = 0; i < 32; i++)
+			// 	$display("=== R[%d]: %h", i, regs_snapshot[i]);
+			// $display("==========================================");
 			regs <= regs_snapshot;
 			done <= 1'b1;					
 		end

@@ -19,9 +19,9 @@ module register_snapshot (
 			regs <= regs_in;
 			done <= 1'b1;
 			$display("=========== Register Snapshot ============");
-			for(int i = 0; i < 32; i++)
-				$display("= S[%d]: %h", i, regs_in[i]);
-			$display("==========================================");
+			// for(int i = 0; i < 32; i++)
+			// 	$display("= S[%d]: %h", i, regs_in[i]);
+			// $display("==========================================");
 		end
 		else begin 
 			done <= 1'b0;

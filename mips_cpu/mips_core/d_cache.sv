@@ -281,8 +281,8 @@ module d_cache #(
 	begin
 		next_state = state;
 		unique case (state)
-			STATE_READY:
-				if (miss)
+			STATE_READY: 
+				if (miss) 
 					if (valid_bits[select_way][i_index] & dirty_bits[select_way][i_index])
 						next_state = STATE_FLUSH_REQUEST;
 					else
@@ -297,12 +297,16 @@ module d_cache #(
 					next_state = STATE_REFILL_REQUEST;
 
 			STATE_REFILL_REQUEST:
-				if (mem_read_address.ARREADY)
+				if (mem_read_address.ARREADY) begin
 					next_state = STATE_REFILL_DATA;
+					// $display("----- DCACHE REFILL REQ --- %h", in.addr);
+				end
 
 			STATE_REFILL_DATA:
-				if (last_refill_word)
+				if (last_refill_word) begin
 					next_state = STATE_READY;
+					// $display("----- DCACHE DONE REFILLING --- %h", in.addr);
+				end
 		endcase
 	end
 
@@ -356,6 +360,7 @@ module d_cache #(
 					begin
 						lru_rp[i_index] <= ~select_way;
 					end
+					// if(hit) $display("----- DCACHE READY Hit: %b in.valid %b in.addr %h next.addr %h", hit, in.valid, in.addr, in.addr_next);
 				end
 
 				STATE_FLUSH_DATA:
@@ -373,6 +378,7 @@ module d_cache #(
 
 					if (last_refill_word)
 					begin
+						// $display("Refill done... in.valid %b in.addr %h next.addr %h", in.valid, in.addr, in.addr_next);
 						valid_bits[r_select_way][r_index] <= 1'b1;
 						dirty_bits[r_select_way][r_index] <= 1'b0;
 					end

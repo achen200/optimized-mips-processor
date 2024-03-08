@@ -197,7 +197,7 @@ module pr_e2m (
 			begin
 				if (i_hc.flush)
 				begin
-					// $display("Flushing e2m");
+					$display("Flushing e2m");
 					o_pc.pc <= '0;
 
 					o_d_cache_input.valid <= 1'b0;
