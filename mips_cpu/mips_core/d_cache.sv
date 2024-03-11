@@ -109,6 +109,10 @@ module d_cache #(
 	logic select_way;
 	logic r_select_way;
 	logic [DEPTH - 1 : 0] lru_rp;
+	logic [DEPTH - 1 : 0] mru_rp;
+	logic [DEPTH - 1 : 0] used0;
+	logic [DEPTH - 1 : 0] used1;
+	logic [1 : 0] selector;
 
 	// databanks
 	genvar g,w;
@@ -195,7 +199,40 @@ module d_cache #(
 		end
 		else if (miss)
 		begin
-			select_way = lru_rp[i_index];
+			// select_way = lru_rp[i_index];
+			if (~used0[i_index]) begin
+				select_way = 'b0;
+			end
+			else if (~used1[i_index]) begin
+				select_way = 'b1;
+			end
+			else begin
+				if (~i_index[1]) begin
+					if (i_index[0]) begin
+						// use mru
+						select_way = mru_rp[i_index];
+						if (selector != 2'b11)
+							selector = selector + 1;
+					end
+					else begin
+						// use lru
+						select_way = lru_rp[i_index];
+						if (selector != 2'b00)
+							selector = selector - 1;
+					end
+				end
+				else begin
+					// use selector
+					if (~selector[1]) begin
+						// use lru
+						select_way = lru_rp[i_index];
+					end
+					else begin
+						// use mru
+						select_way = mru_rp[i_index];
+					end
+				end
+			end
 		end
 		else
 		begin
@@ -333,8 +370,13 @@ module d_cache #(
 			databank_select <= 1;
 			for (int i=0; i<ASSOCIATIVITY;i++)
 				valid_bits[i] <= '0;
-			for (int i=0; i<DEPTH;i++)
+			for (int i=0; i<DEPTH;i++) begin
 				lru_rp[i] <= 0;
+				mru_rp[i] <= 0;
+				used0[i] <= 0;
+				used1[i] <= 0;
+			end
+			selector = 2'b10;
 		end
 		else
 		begin
@@ -353,7 +395,13 @@ module d_cache #(
 						dirty_bits[select_way][i_index] <= 1'b1;
 					if (in.valid)
 					begin
+						// $display("select_way: %b", select_way);
+						if (select_way)
+							used1[i_index] <= 'b1;
+						else
+							used0[i_index] <= 'b1;
 						lru_rp[i_index] <= ~select_way;
+						mru_rp[i_index] <= select_way;
 					end
 				end
 
