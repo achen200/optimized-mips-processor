@@ -106,9 +106,11 @@ module mips_core (
 	hazard_control_ifc m2w_hc();
 	load_pc_ifc load_pc();
 	logic recover_snapshot;
-	logic recovery_done, recovery_done_ack;
+	logic recovery_done;
 	logic [`DATA_WIDTH-1:0] r_to_s [32];
 	logic [`DATA_WIDTH-1:0] s_to_r [32];
+
+	d_cache_input_ifc dc_req_out();
 
 	// xxxx Memory
 	axi_write_address axi_write_address();
@@ -195,7 +197,6 @@ module mips_core (
 
 	reg_file REG_FILE(
 		.clk,
-		.recovery_done_ack,
 		.i_decoded(dec_decoder_output),
 		.i_wb(m2w_write_back), // WB stage
 		.recover_snapshot(recover_snapshot),
@@ -282,7 +283,7 @@ module mips_core (
 	d_cache D_CACHE (
 		.clk, .rst_n,
 
-		.in(e2m_d_cache_input),
+		.in(dc_req_out),
 		.out(mem_d_cache_output),
 
 		.mem_read_address(mem_read_address[1]),
@@ -303,8 +304,7 @@ module mips_core (
 		.i_d_cache_output      (predicted_value),
 		.i_d_cache_pass_through(e2m_d_cache_pass_through),
 		.o_done                (mem_done),
-		.o_write_back          (mem_write_back),
-		.predicted_value
+		.o_write_back          (mem_write_back)
 	);
 
 	// ========================================================================
@@ -337,6 +337,8 @@ module mips_core (
 		.lw_hazard,
 		.ex_branch_result,
 		.mem_done,
+		.ex_ctl      (d2e_alu_pass_through),
+		.dec_pass (dec_alu_pass_through),
 
 		.i2i_hc,
 		.i2d_hc,
@@ -346,12 +348,12 @@ module mips_core (
 		.load_pc,
 		.recover_snapshot,
 		.recovery_done,
-		.recovery_done_ack,
 		.s_to_r,
 		.r_to_s,
 		.d_cache_output(mem_d_cache_output),
 		.predicted_value,
-		.d_cache_req(e2m_d_cache_input)
+		.ex_req_in(e2m_d_cache_input), 
+		.dc_req_out
 	);
 
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -410,6 +412,7 @@ module mips_core (
 			* If an instruction goes into d2e pipeline register and is not a
 			* nop, we count it as an instruction we executed.
 			*/
+		// $display("Inside MIPS Core: i2d_stall %b e2m_hc_stall %b", i2d_hc.stall, e2m_hc.stall);
 		if (!i2d_hc.stall
 			&& !d2e_hc.flush
 			&& dec_decoder_output.valid
@@ -424,18 +427,19 @@ module mips_core (
 			wb_event(m2w_write_back.rw_addr, m2w_write_back.rw_data);
 		end
 
-		if (!e2m_hc.stall
-			&& !m2w_hc.flush
+		if ((!e2m_hc.stall | (i2i_hc.stall & i2d_hc.stall & d2e_hc.stall & e2m_hc.stall)) //If ov_stall == 1
+			&& 
+			!m2w_hc.flush
 			&& mem_d_cache_output.valid)
 		begin
-			if (e2m_d_cache_input.mem_action == READ)begin
+			if (dc_req_out.mem_action == READ)begin
 				//$display("input addr: %d read data: %d ",  e2m_d_cache_input.addr,  mem_d_cache_output.data);
-				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, mem_d_cache_output.data);
+				ls_event(dc_req_out.mem_action, dc_req_out.addr, mem_d_cache_output.data);
 			end
 			else begin
 				//$display("d_cache write");
 				//$display("input addr: %d input data: %d ",  e2m_d_cache_input.addr,  e2m_d_cache_input.data);
-				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, e2m_d_cache_input.data);
+				ls_event(dc_req_out.mem_action, dc_req_out.addr, dc_req_out.data);
 			end
 		end
 	end

@@ -25,13 +25,19 @@ module hazard_controller (
 	// Feedback from DEC
 	pc_ifc.in dec_pc,
 	branch_decoded_ifc.hazard dec_branch_decoded,
+	alu_pass_through_ifc.in dec_pass,
 	// Feedback from EX
 	pc_ifc.in ex_pc,
 	input lw_hazard,
 	branch_result_ifc.in ex_branch_result,
+	alu_pass_through_ifc.in ex_ctl,
 	// Feedback from MEM
 	input mem_done,
 	pc_ifc.in mem_pc,
+
+	//D-Cache Signals
+	d_cache_input_ifc.in ex_req_in,
+	d_cache_input_ifc.out dc_req_out,
 
 	// Hazard control output
 	hazard_control_ifc.out i2i_hc,
@@ -48,8 +54,7 @@ module hazard_controller (
 	input recovery_done,
 	input [`DATA_WIDTH-1:0] r_to_s [32],
 	output [`DATA_WIDTH-1:0] s_to_r [32],
-	output recover_snapshot, recovery_done_ack,
-	d_cache_input_ifc.in d_cache_req
+	output recover_snapshot
 );
 
 	branch_controller BRANCH_CONTROLLER (
@@ -60,10 +65,11 @@ module hazard_controller (
 		.ex_branch_result
 	);
 
-	logic take_snapshot, snapshot_ack;
-	logic vp_en, vp_done, vp_lock, out_lock, out_lock_off;
+	logic take_snapshot;
+	logic vp_en, vp_done, vp_lock;
+	logic recover_en;
 	logic rs_done;
-	logic [`DATA_WIDTH-1:0] pred;
+	logic [`DATA_WIDTH-1:0] vp_pc, pred;
 	logic pred_valid;
 
 	register_snapshot REG_SNAPSHOT(
@@ -71,22 +77,20 @@ module hazard_controller (
 		.take_snapshot,
 		.regs_in(r_to_s),
 		.regs_snapshot(s_to_r),
-		.done(rs_done),
-		.snapshot_ack
+		.done(rs_done)
 	);
 
 	value_prediction VALUE_PRED(
 		.clk, .rst_n,
-		.vp_en,
+		.vp_en, .recover_en,
 		.addr(vp_pc),
 		.d_cache_data(d_cache_output),
-		.d_cache_req,
-		.en_recover(recover_snapshot),
-		.out(pred), .out_lock, .out_lock_off,
+		.d_cache_req(dc_req),
+		.recover(recover_snapshot),
+		.out(pred), 
 		.out_valid(pred_valid),
 		.done(vp_done),
 		.recovery_done,
-		.recovery_done_ack,
 		.vp_lock,
 		.last_predicted_pc(pc_out)
 	);
@@ -111,26 +115,20 @@ module hazard_controller (
 	// i.e. any data goes to wb is finalized and waiting to be commited
 
 	//Stall overrides
-	logic if_stall_ov, if_flush_ov, if_stall_ov_off, dec_stall_ov_off, ex_stall_ov_off, mem_stall_ov_off; 
-	logic dec_stall_ov, dec_flush_ov;
-	logic ex_stall_ov, ex_flush_ov;
-	logic mem_stall_ov, mem_flush_ov;
+	logic if_stall_ov, if_flush_ov, if_stall_ov_off; 
+	logic dec_stall_ov, dec_flush_ov, dec_stall_ov_off;
+	logic ex_stall_ov, ex_flush_ov, ex_stall_ov_off;
+	logic mem_stall_ov, mem_flush_ov, mem_stall_ov_off;
 	logic ov_stall, ov_flush;
-	logic output_vp;
-	logic save_pc;
 
-	logic [`ADDR_WIDTH-1:0] vp_pc, pc_out;
+	//D-cache req
+	d_cache_input_ifc imm_dc_req();	
+	d_cache_input_ifc dc_req();		
+
+	logic output_vp;				//Whether to output vp or d-cache result
+	logic [`DATA_WIDTH-1:0] pc_out;	//PC checkpoint
 
 	/*** Value Prediction ***/
-	assign predicted_value.data = pred;
-	assign predicted_value.valid = pred_valid;
-
-	always_ff @(posedge clk) begin
-		if(~save_pc) begin
-			vp_pc <= e2m_pc.pc;
-		end
-	end
-
 	always_comb begin
 		if(output_vp) begin
 			predicted_value.data = pred;
@@ -146,68 +144,100 @@ module hazard_controller (
 		if_stall_ov = ov_stall;
 		dec_stall_ov = ov_stall;
 		ex_stall_ov = ov_stall;
+		mem_stall_ov = ov_stall;
 
 		if_flush_ov = ov_flush;
 		dec_flush_ov = ov_flush;
 		ex_flush_ov = ov_flush;
+		mem_flush_ov = ov_flush;
+		if_stall_ov_off = ov_flush;
+		dec_stall_ov_off = ov_flush;
+		ex_stall_ov_off = ov_flush;
+		mem_stall_ov_off = ov_flush;
 	end
 
-	always @(d_cache_req.valid) begin
-		//take_snapshot = 1'b0;
-		ov_stall  = 1'b0;
-		ov_flush = 1'b0;
-		vp_en = 1'b0;
-		output_vp = 1'b1;
-		out_lock_off = 1'b0;
-		
-		//First Store
-		if(d_cache_req.valid && d_cache_req.mem_action == WRITE && ~vp_lock) begin //Immediate execute
+	//Handle stores - immediate execute
+	always_comb begin
+		if(dc_req.valid & (vp_lock | (dc_req.mem_action == READ & ~d_cache_output.valid)))
+			output_vp = 1'b1;
+		else
 			output_vp = 1'b0;
-		end
-		else if(d_cache_req.valid && d_cache_req.mem_action == READ && ~vp_lock) begin
-			if(~out_lock) begin //First Load miss
-				vp_en = 1'b1;
-				take_snapshot = 1'b1;
-				save_pc = 1'b1; 
-				$display("Begin VP");
-			end
-			else begin
-				out_lock_off = 1'b1;
-			end
-		end
-		else if(d_cache_req.valid && vp_lock) begin //second load/store request 
-			$display("2nd L/S request, flushing and stalling...");
-			ov_stall = 1'b1;
-			//ov_flush = 1'b1;
-		end
-	end
-
-	always @(vp_lock) begin
-		//ov_flush = 1'b0;
-		if(vp_lock) begin			 	//Beginning of VP (prediction already outputed)
-			//  $display("VP Locked"); 	//, and predicted value valid");
-			vp_en = 1'b0;
-		end
-		else begin
-			// $display("VP Unlocked"); 						
-			// if(recover_snapshot) begin
-			// 	//ov_stall = 1'b1;
-			// 	// $display("Flushing pipeline");
-			// 	//ov_flush = 1'b1;				//TODO: Find out if this turns off properly
-			// end
-			// $display("Releasing VP_PC");
-			//$display("Stall overrides off");
-			//ov_stall = 1'b0;
-			save_pc = 1'b0;
-			//$display("Begin Recovery Sequence");
-			
-		end
 	end
 
 	always_comb begin
-		if(rs_done) begin
-			snapshot_ack = 1'b1;
-			take_snapshot = 1'b0;
+		dc_req_out.valid = dc_req.valid;
+		dc_req_out.mem_action = dc_req.mem_action;
+		dc_req_out.addr = dc_req.addr;
+		dc_req_out.addr_next = dc_req.addr_next;
+		dc_req_out.data = dc_req.data;
+	end
+
+	//Handle when cache_request is stored
+	always_comb begin
+		if(vp_lock | vp_en | ov_stall) begin
+			dc_req.valid = imm_dc_req.valid;
+			dc_req.mem_action = imm_dc_req.mem_action;
+			dc_req.addr = imm_dc_req.addr;
+			dc_req.addr_next = imm_dc_req.addr_next;
+			dc_req.data = imm_dc_req.data;
+		end
+		else begin
+			dc_req.valid = ex_req_in.valid;
+			dc_req.mem_action = ex_req_in.mem_action;
+			dc_req.addr = ex_req_in.addr;
+			dc_req.addr_next = ex_req_in.addr_next;
+			dc_req.data = ex_req_in.data;
+		end
+	end
+
+	always_ff @(posedge clk) begin
+		if(first_lmiss) begin
+			imm_dc_req.valid = ex_req_in.valid;
+			imm_dc_req.mem_action = ex_req_in.mem_action;
+			imm_dc_req.addr = ex_req_in.addr;
+			imm_dc_req.addr_next = ex_req_in.addr;
+			imm_dc_req.data = ex_req_in.data;
+		end
+	end
+
+
+	logic next, flushed;
+	logic first_lmiss;
+	assign first_lmiss = ex_req_in.valid && ex_req_in.mem_action == READ && ~vp_lock && ~d_cache_output.valid & ~next;
+
+	always_ff @(posedge clk) begin
+		if(~vp_lock & vp_done & ov_stall) begin	// 
+			ov_stall <= 1'b0;
+			recover_en <= 1'b0;
+		end
+		if(recover_snapshot) begin
+			recover_en <= 1'b0; 
+			ov_flush <= 1'b1;
+			flushed <= 1'b1;
+		end
+		if(flushed) begin
+			ov_flush <= 1'b0;
+			flushed <= 1'b0;
+			ov_stall <= 1'b0;
+		end
+		if(next) begin
+			vp_en <= 1'b0;
+			take_snapshot <= 1'b0;
+			next <= 1'b0;
+		end
+ 
+		//Handle load miss  
+		if(first_lmiss) begin	 
+			$display("========== VP1 begin ==========");
+			vp_pc <= mem_pc.pc;
+			vp_en <= 1'b1;
+			take_snapshot <= 1'b1; 
+			recover_en <= 1'b1;
+			next <= 1'b1;
+		end
+		if (ex_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin
+			$display("========== VP2 begin ==========");
+			ov_stall <= 1'b1;
 		end
 	end
 
@@ -260,18 +290,12 @@ module hazard_controller (
 			if (ic_miss) begin
 				if_stall = 1'b1;
 				if_flush = 1'b1;
-				// $display("ic_miss");
 			end
 			if (ex_overload) begin
 				if_stall = 1'b0;
 				if_flush = 1'b1;
 			end
-			if (dec_stall) begin
-				if_stall = 1'b1;
-				// $display("dec_stall");
-			end
-			
-			if(if_stall_ov)
+			if (dec_stall | mem_stall | if_stall_ov)
 				if_stall = 1'b1;
 		end
 		else begin
@@ -292,10 +316,7 @@ module hazard_controller (
 				dec_stall = 1'b1;
 				dec_flush = 1'b1;
 			end
-			if (ex_stall)
-				dec_stall = 1'b1;
-
-			if(dec_stall_ov)
+			if (ex_stall | mem_stall | dec_stall_ov)
 				dec_stall = 1'b1;
 		end
 		else begin
@@ -305,7 +326,6 @@ module hazard_controller (
 			if(dec_flush_ov)
 				dec_flush = 1'b1;
 		end
-
 	end
 
 	always_comb
@@ -353,37 +373,18 @@ module hazard_controller (
 		e2m_hc.flush = ex_flush;
 		e2m_hc.stall = mem_stall;
 		m2w_hc.flush = mem_flush;
-		m2w_hc.stall = 1'b0;
+		m2w_hc.stall = 1'b0; 
 	end
 	
-	always @(recovery_done) begin	
-		if(recovery_done) begin
-			dec_stall_ov_off = 1'b1; //enables instruction flush
-			ex_stall_ov_off = 1'b1;  //enables decode flush
-			mem_stall_ov_off = 1'b1; //enables execute flush
-			ov_flush = 1'b1;
-			// $display("Flushing everything dec_stall %b if_flush %b", dec_stall, if_flush);
-		end
-		else begin
-			dec_stall_ov_off = 1'b0;
-			ex_stall_ov_off = 1'b0;  
-			mem_stall_ov_off = 1'b0; 
-			ov_flush = 1'b0;
-			// $display("Turning off flush dec_stall %b if_flush %b", dec_stall, if_flush);
-		end
-	end
+
 	// Derive the load_pc	
 	always_comb
 	begin
-		if(recovery_done_ack) begin
+		if(flushed) begin	//Resetting to checkpoint upon mispredict
 			load_pc.new_pc = pc_out;
 			load_pc.we = 1'b1;
-			if_stall_ov_off = 1'b1;
-
-			//$display("Resetting PC to %h Stall %b Flush %b", load_pc.new_pc, if_stall, if_flush);
 		end
 		else begin
-			if_stall_ov_off = 1'b0;
 			load_pc.we = dec_overload | ex_overload;
 			if (dec_overload)
 				load_pc.new_pc = dec_branch_decoded.target;
@@ -393,15 +394,19 @@ module hazard_controller (
 	end
 
 `ifdef SIMULATION
-	always_ff @(ic_miss) begin
+	always@(ic_miss) begin
 		if(ic_miss) begin 
 			stats_event("ic_misses");
 			inc_ic_amiss = 1'b1;
 		end
 	end
-	always_ff @(dc_miss) begin
+	always @(dc_miss) 
 		if(dc_miss) stats_event("dc_misses");
-	end
+	always @(recover_snapshot)
+		if(recover_snapshot) stats_event("VP miss");
+	always @(vp_done)
+		if(vp_done) stats_event("VP hit");
+
 	always_ff @(posedge clk)
 	begin
 		if (inc_ic_amiss) inc_ic_amiss = 1'b0;

@@ -22,8 +22,8 @@ interface reg_file_output_ifc ();
 endinterface
 
 module reg_file (
-	input clk,    // Clock
-
+	input clk, 
+	
 	// Input from decoder
 	decoder_output_ifc.in i_decoded,
 
@@ -32,48 +32,31 @@ module reg_file (
 
 	// Output data
 	reg_file_output_ifc.out out,
-	input recover_snapshot, recovery_done_ack,
+	input recover_snapshot,
 	input  [`DATA_WIDTH-1:0] regs_snapshot[32],
 	output [`DATA_WIDTH-1:0] regs_out[32],
 	output logic done
 );
 
 	logic [`DATA_WIDTH - 1 : 0] regs [32];
-	logic d;
+	logic recovery;
 
 	assign out.rs_data = i_decoded.uses_rs ? regs[i_decoded.rs_addr] : '0;
 	assign out.rt_data = i_decoded.uses_rt ? regs[i_decoded.rt_addr] : '0;
-	assign regs_out = regs; //assuming this works
-	//assign done = d;
+	assign regs_out = regs; 
 
 	always_ff @(posedge clk) begin
-		if(i_wb.uses_rw)
-		begin
-			regs[i_wb.rw_addr] = i_wb.rw_data;
-		end
-	end
-
-	always_ff @(posedge clk) begin
-		if(d) 
-			done <= 1'b1;
-		else if(recovery_done_ack) begin //if ~d and recovery_done_ack 
-			done <= 1'b0;
-			// $display("Done toggling off next cycle");
-		end
-	end
-	always @(recover_snapshot) begin
 		if(recover_snapshot) begin
-			// $display("Beginning recovery");
-			regs = regs_snapshot;
-			d = 1'b1;
-			$display("=========== Recovered Snapshot ============");
-			// for(int i = 0; i < 32; i++)
-			// 	$display("=== R[%d]: %h", i, regs[i]);
-			// $display("==========================================");
+			// $display("=========== Recovered Snapshot ============");
+			regs <= regs_snapshot;
+			done <= 1'b1;					
 		end
 		else begin
-			d = 1'b0;
+			if(i_wb.uses_rw)
+				regs[i_wb.rw_addr] <= i_wb.rw_data;	
+			done <= 1'b0;
 		end
+		
 	end
 
 endmodule

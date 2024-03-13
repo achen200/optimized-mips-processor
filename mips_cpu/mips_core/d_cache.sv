@@ -344,13 +344,13 @@ module d_cache #(
 	begin
 		next_state = state;
 		unique case (state)
-			STATE_READY:
-				if (miss)
+			STATE_READY: 
+				if (miss) 
 					if (valid_bits[select_way][i_index] & dirty_bits[select_way][i_index])
 						next_state = STATE_FLUSH_REQUEST;
 					else
 						next_state = STATE_REFILL_REQUEST;
-
+						
 			STATE_FLUSH_REQUEST:
 				if (mem_write_address.AWREADY)
 					next_state = STATE_FLUSH_DATA;
@@ -361,7 +361,7 @@ module d_cache #(
 
 			STATE_REFILL_REQUEST:
 				if (mem_read_address.ARREADY)
-					next_state = STATE_REFILL_DATA;
+					next_state = STATE_REFILL_DATA;			
 
 			STATE_REFILL_DATA:
 				if (last_refill_word)
