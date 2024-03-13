@@ -57,6 +57,9 @@ module mips_core (
 	pc_ifc if_pc_next();
 	cache_output_ifc if_i_cache_output();
 
+	
+	cache_output_ifc sb_output();
+
 	// ==== IF to DEC
 	pc_ifc i2d_pc();
 	cache_output_ifc i2d_inst();
@@ -87,6 +90,7 @@ module mips_core (
 
 	// |||| MEM Stage
 	cache_output_ifc mem_d_cache_output();
+	cache_output_ifc predicted_value();
 	logic mem_done;
 	write_back_ifc mem_write_back();
 
@@ -101,6 +105,10 @@ module mips_core (
 	hazard_control_ifc e2m_hc();
 	hazard_control_ifc m2w_hc();
 	load_pc_ifc load_pc();
+	logic recover_snapshot;
+	logic recovery_done, recovery_done_ack;
+	logic [`DATA_WIDTH-1:0] r_to_s [32];
+	logic [`DATA_WIDTH-1:0] s_to_r [32];
 
 	// xxxx Memory
 	axi_write_address axi_write_address();
@@ -112,8 +120,8 @@ module mips_core (
 	axi_write_address mem_write_address[1]();
 	axi_write_data mem_write_data[1]();
 	axi_write_response mem_write_response[1]();
-	axi_read_address mem_read_address[2]();
-	axi_read_data mem_read_data[2]();
+	axi_read_address mem_read_address[3]();
+	axi_read_data mem_read_data[3]();
 
 
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -140,6 +148,24 @@ module mips_core (
 
 		.out          (if_i_cache_output)
 	);
+
+	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	// xxxx Stream Buffer
+	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+	i_stream_buffer I_STREAM_BUFFER(
+		.clk, .rst_n,
+
+		.i_pc_current (if_pc_current),
+		.i_pc_next    (if_pc_next),
+
+		.ic_out (if_i_cache_output),
+
+		.sb_out          (sb_output),
+		.mem_read_address(mem_read_address[2]),
+		.mem_read_data   (mem_read_data[2])
+	);
+
 	// If you want to change the line size and total size of instruction cache,
 	// uncomment the following two lines and change the parameter.
 
@@ -154,7 +180,7 @@ module mips_core (
 		.i_hc(i2d_hc),
 
 		.i_pc   (if_pc_current),     .o_pc   (i2d_pc),
-		.i_inst (if_i_cache_output), .o_inst (i2d_inst)
+		.i_inst (sb_output), .o_inst (i2d_inst)
 	);
 
 	// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -169,11 +195,14 @@ module mips_core (
 
 	reg_file REG_FILE(
 		.clk,
-
+		.recovery_done_ack,
 		.i_decoded(dec_decoder_output),
 		.i_wb(m2w_write_back), // WB stage
-
-		.out(dec_reg_file_output)
+		.recover_snapshot(recover_snapshot),
+		.out(dec_reg_file_output),
+		.regs_out(r_to_s),
+		.regs_snapshot(s_to_r),
+		.done(recovery_done)
 	);
 
 	forward_unit FORWARD_UNIT(
@@ -270,10 +299,12 @@ module mips_core (
 	// 	D_CACHE.BLOCK_OFFSET_WIDTH = 2;
 
 	mem_stage_glue MEM_STAGE_GLUE (
-		.i_d_cache_output      (mem_d_cache_output),
+		// .i_d_cache_output      (mem_d_cache_output),
+		.i_d_cache_output      (predicted_value),
 		.i_d_cache_pass_through(e2m_d_cache_pass_through),
 		.o_done                (mem_done),
-		.o_write_back          (mem_write_back)
+		.o_write_back          (mem_write_back),
+		.predicted_value
 	);
 
 	// ========================================================================
@@ -298,10 +329,11 @@ module mips_core (
 	hazard_controller HAZARD_CONTROLLER (
 		.clk, .rst_n,
 
-		.if_i_cache_output,
+		.if_i_cache_output(sb_output),
 		.dec_pc(i2d_pc),
 		.dec_branch_decoded,
 		.ex_pc(d2e_pc),
+		.mem_pc(e2m_pc),
 		.lw_hazard,
 		.ex_branch_result,
 		.mem_done,
@@ -311,13 +343,21 @@ module mips_core (
 		.d2e_hc,
 		.e2m_hc,
 		.m2w_hc,
-		.load_pc
+		.load_pc,
+		.recover_snapshot,
+		.recovery_done,
+		.recovery_done_ack,
+		.s_to_r,
+		.r_to_s,
+		.d_cache_output(mem_d_cache_output),
+		.predicted_value,
+		.d_cache_req(e2m_d_cache_input)
 	);
 
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 	// xxxx Memory Arbiter
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-	memory_arbiter #(.WRITE_MASTERS(1), .READ_MASTERS(2)) MEMORY_ARBITER (
+	memory_arbiter #(.WRITE_MASTERS(1), .READ_MASTERS(3)) MEMORY_ARBITER (
 		.clk, .rst_n,
 		.axi_write_address,
 		.axi_write_data,
@@ -380,6 +420,7 @@ module mips_core (
 
 		if (m2w_write_back.uses_rw)
 		begin
+			//$display("wb addr: %h wb data: %h", m2w_write_back.rw_addr, m2w_write_back.rw_data);
 			wb_event(m2w_write_back.rw_addr, m2w_write_back.rw_data);
 		end
 
@@ -387,10 +428,15 @@ module mips_core (
 			&& !m2w_hc.flush
 			&& mem_d_cache_output.valid)
 		begin
-			if (e2m_d_cache_input.mem_action == READ)
+			if (e2m_d_cache_input.mem_action == READ)begin
+				//$display("input addr: %d read data: %d ",  e2m_d_cache_input.addr,  mem_d_cache_output.data);
 				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, mem_d_cache_output.data);
-			else
+			end
+			else begin
+				//$display("d_cache write");
+				//$display("input addr: %d input data: %d ",  e2m_d_cache_input.addr,  e2m_d_cache_input.data);
 				ls_event(e2m_d_cache_input.mem_action, e2m_d_cache_input.addr, e2m_d_cache_input.data);
+			end
 		end
 	end
 `endif

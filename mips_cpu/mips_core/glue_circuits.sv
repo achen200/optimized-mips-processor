@@ -83,6 +83,7 @@ endmodule
 module mem_stage_glue (
 	cache_output_ifc.in i_d_cache_output,
 	d_cache_pass_through_ifc.in i_d_cache_pass_through,
+	cache_output_ifc.in predicted_value,
 
 	output logic o_done,
 	write_back_ifc.out o_write_back

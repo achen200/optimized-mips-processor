@@ -43,11 +43,14 @@ module fetch_unit (
 
 	always_ff @(posedge clk)
 	begin
-		if(~rst_n)
+		if(~rst_n) begin
 			o_pc_current.pc <= '0;	// Start point of programs are always 0x0
+		end
 		else
 		begin
 			o_pc_current.pc <= o_pc_next.pc;
+			// $display("Current PC: %h", o_pc_current.pc);
+			// $display("Next PC: %h Stall %b", o_pc_next.pc, i_hc.stall);
 		end
 	end
 

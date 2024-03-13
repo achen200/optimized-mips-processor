@@ -263,7 +263,7 @@ module perceptron (
 		x = 1;
 		for(int i = 0; i < P_NUM; i++) begin
 			for(int j = 0; j < N; j++) begin
-				w[i][j] <= '0;
+				w[i][j] = '0;
 			end
 			// counter[i] = 0;
 		end
