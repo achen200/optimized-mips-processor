@@ -20,9 +20,18 @@ module value_prediction #(
 logic [`ADDR_WIDTH - 1 : 0] last_predicted;
 logic [`DATA_WIDTH - 1 : 0] predicted;
 
+localparam HASH_WIDTH = 10;
+localparam HASH_NUM = 1 << HASH_WIDTH;
+logic lct [HASH_NUM];
+logic [`DATA_WIDTH - 1 : 0] lvpt [HASH_NUM];
+logic [HASH_WIDTH - 1 : 0] hash;
+
+assign hash = addr[`ADDR_WIDTH - 1 : `ADDR_WIDTH - HASH_WIDTH];
+assign last_hash = last_predicted_pc[`ADDR_WIDTH - 1 : `ADDR_WIDTH - HASH_WIDTH];
+
 // Make prediction
 always_comb begin
-    predicted = '0; // predict all zeros for now
+    predicted = '0; //lvpt[hash];
 end
 
 always_ff @(posedge clk) begin
@@ -54,6 +63,7 @@ always_ff @(posedge clk) begin
 	if(d_cache_data.valid & recover_en) begin	
 		first <= 1'b0;
 		if(first) begin
+			lvpt[last_hash] <= d_cache_data.data;
 			if(d_cache_data.data != last_predicted) begin
 				$display("VP: Incorrect prediction detected, recovery begins next cycle");
 				recover <= 1'b1;
