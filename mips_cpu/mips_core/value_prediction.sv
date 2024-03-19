@@ -26,6 +26,7 @@ always_comb begin
 end
 
 always_ff @(posedge clk) begin
+	if(done) done <= 1'b0;
 	if(recovery_done) begin 
 		vp_lock <= 1'b0;
 	end

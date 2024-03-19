@@ -206,9 +206,10 @@ module hazard_controller (
 	assign first_lmiss = ex_req_in.valid && ex_req_in.mem_action == READ && ~vp_lock && ~d_cache_output.valid & ~next;
 
 	always_ff @(posedge clk) begin
-		if(~vp_lock & vp_done & ov_stall) begin	// 
-			ov_stall <= 1'b0;
+		if(vp_done) begin
 			recover_en <= 1'b0;
+			if(ov_stall)
+				ov_stall <= 1'b0;
 		end
 		if(recover_snapshot) begin
 			recover_en <= 1'b0; 
