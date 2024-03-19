@@ -41,7 +41,7 @@ endinterface
 module d_cache #(
 	parameter INDEX_WIDTH = 6,  // 2 * 1 KB Cache Size 
 	parameter BLOCK_OFFSET_WIDTH = 2,
-	parameter ASSOCIATIVITY = 2
+	parameter ASSOCIATIVITY = 4
 	)(
 	// General signals
 	input clk,    // Clock
@@ -106,9 +106,10 @@ module d_cache #(
 	logic [INDEX_WIDTH - 1 : 0] databank_raddr;
 	logic [`DATA_WIDTH - 1 : 0] databank_rdata [ASSOCIATIVITY][LINE_SIZE];
 
-	logic select_way;
-	logic r_select_way;
+	logic [1:0] select_way;
+	logic [1:0] r_select_way;
 	logic [DEPTH - 1 : 0] lru_rp;
+	logic [3:0] lru_state [DEPTH];
 
 	// databanks
 	genvar g,w;
@@ -174,7 +175,9 @@ module d_cache #(
 	always_comb
 	begin
 		tag_hit = ( ((i_tag == tagbank_rdata[0]) & valid_bits[0][i_index])
-				  |	((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index]));
+				  |	((i_tag == tagbank_rdata[1]) & valid_bits[1][i_index])
+				  |	((i_tag == tagbank_rdata[2]) & valid_bits[2][i_index])
+				  |	((i_tag == tagbank_rdata[3]) & valid_bits[3][i_index]));
 		hit = in.valid
 			& (tag_hit)
 			& (state == STATE_READY);
@@ -186,20 +189,29 @@ module d_cache #(
 		begin
 			if (i_tag == tagbank_rdata[0])
 			begin
-				select_way = 'b0;
+				select_way = 2'b00;
 			end
-			else 
+			else if (i_tag == tagbank_rdata[1])
 			begin
-				select_way = 'b1;
+				select_way = 2'b01;
+			end
+			else if (i_tag == tagbank_rdata[2])
+			begin
+				select_way = 2'b10;
+			end
+			else
+			begin
+				select_way = 2'b11;
 			end
 		end
 		else if (miss)
 		begin
-			select_way = lru_rp[i_index];
+			// select_way = lru_rp[i_index];
+			select_way = lru_state[i_index][1:0];
 		end
 		else
 		begin
-			select_way = 'b0;
+			select_way = 2'b00;
 		end
 	
 	end
@@ -334,8 +346,10 @@ module d_cache #(
 			databank_select <= 1;
 			for (int i=0; i<ASSOCIATIVITY;i++)
 				valid_bits[i] <= '0;
-			for (int i=0; i<DEPTH;i++)
+			for (int i=0; i<DEPTH;i++) begin
 				lru_rp[i] <= 0;
+				lru_state[i] = 4'b0000;
+			end
 		end
 		else
 		begin
@@ -355,6 +369,18 @@ module d_cache #(
 					if (in.valid)
 					begin
 						lru_rp[i_index] <= ~select_way;
+						if (select_way == 2'b00) begin
+							lru_state[i_index] = {lru_state[i_index][2:0], 1'b1};
+						end
+						else if (select_way == 2'b01) begin
+							lru_state[i_index] = {lru_state[i_index][2:0], 1'b0};
+						end
+						else if (select_way == 2'b10) begin
+							lru_state[i_index] = {lru_state[i_index][2:0], 1'b1};
+						end
+						else begin
+							lru_state[i_index] = {lru_state[i_index][2:0], 1'b0};
+						end
 					end
 				end
 
