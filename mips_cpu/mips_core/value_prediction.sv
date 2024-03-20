@@ -40,7 +40,7 @@ always_ff @(posedge clk) begin
 			done <= 1'b0;
 			last_predicted <= predicted;
 			last_predicted_pc <= addr;
-			$display("VP: PC %h data %h", addr, predicted);
+			// $display("VP: PC %h data %h", addr, predicted);
 			out <= predicted;
 			out_valid <= 1'b1; 	//Prediction only valid for first cycle
 		end
@@ -56,11 +56,11 @@ always_ff @(posedge clk) begin
 		first <= 1'b0;
 		if(first) begin
 			if(d_cache_data.data != last_predicted) begin
-				$display("VP: Incorrect prediction detected, recovery begins next cycle");
+				// $display("VP: Incorrect prediction detected, recovery begins next cycle");
 				recover <= 1'b1;
 			end
 			else begin
-				$display("VP: Prediction correct detected, no need to recover");
+				// $display("VP: Prediction correct detected, no need to recover");
 				vp_lock <= 1'b0;
 				done <= 1'b1;
 				out_valid <= 1'b0;

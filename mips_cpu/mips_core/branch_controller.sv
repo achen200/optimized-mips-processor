@@ -29,7 +29,6 @@ module branch_controller (
 	logic request_prediction;
 	logic prev_req;
 	logic branch_count;
-	logic branch_miss;
 
 	// Change the following line to switch predictor
 	perceptron PREDICTOR (
@@ -52,10 +51,6 @@ module branch_controller (
 		request_prediction = dec_branch_decoded.valid & ~dec_branch_decoded.is_jump;
 
 		if(~prev_req & request_prediction) branch_count = 1'b1;
-		if(ex_branch_result.valid & (ex_branch_result.prediction != ex_branch_result.outcome))
-		begin
-			branch_miss = 1'b1;
-		end
 
 		dec_branch_decoded.recovery_target =
 			(dec_branch_decoded.prediction == TAKEN)
@@ -70,11 +65,6 @@ module branch_controller (
 		begin
 			stats_event("branch_pred");
 			branch_count = 1'b0;
-		end
-		if(branch_miss)
-		begin
-			stats_event("branch_miss");
-			branch_miss = 1'b0;
 		end
 	end
 `endif
