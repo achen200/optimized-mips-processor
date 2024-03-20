@@ -15,6 +15,9 @@
  * See wiki page "Branch and Jump" for details of branch and jump instructions.
  */
 `include "mips_core.svh"
+`ifdef SIMULATION
+import "DPI-C" function void stats_event (input string e);
+`endif
 
 module hazard_controller (
 	input clk,    // Clock
@@ -397,11 +400,11 @@ module hazard_controller (
 	begin
 		ic_prev <= ic_miss;
 		dc_prev <= dc_miss;
-
 		if (ic_miss & ~ic_prev) stats_event("ic_misses");
 		if (dc_miss & ~dc_prev) stats_event("dc_misses");
 		if (vp_en) stats_event("VP_count");
 		if (vp_done) stats_event("VP_hit");
+		if (dec_branch_decoded.valid & ~dec_branch_decoded.is_jump & ~dec_stall) stats_event("branch_count");
 
 		if (ic_miss) stats_event("ic_miss_cycles"); 
 		if (ds_miss) stats_event("ds_miss");
