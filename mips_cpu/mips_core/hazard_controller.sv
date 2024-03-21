@@ -404,14 +404,10 @@ module hazard_controller (
 		ic_prev <= ic_miss;
 		dc_prev <= dc_miss;
 		if (ic_miss & ~ic_prev) stats_event("ic_misses");
-		if (dc_miss & ~dc_prev & ~vp_lock) begin
-			stats_event("dc_misses");
-			// $display("dc_miss");
-		end
+		if (dc_miss & ~dc_prev & ~vp_lock) stats_event("dc_misses");
 		if (vp_en) stats_event("VP_count");
 		if (vp_done) stats_event("VP_hit");
 		if (dec_branch_decoded.valid & ~dec_branch_decoded.is_jump & ~dec_stall) stats_event("branch_count");
-
 		if (ic_miss) stats_event("ic_miss_cycles"); 
 		if (ds_miss) stats_event("ds_miss");
 		if (dec_overload) stats_event("dec_overload");

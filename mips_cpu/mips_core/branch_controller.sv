@@ -75,8 +75,8 @@ module perceptron (
 );
 	parameter N = 7;										// Number of Bits for GHR
 	parameter W_BITS = 6;									// Number of Bits for weight
-	parameter P_BITS = 8;									// Number of bits for perceptron
-	parameter P_NUM = 256;									// Number of perceptrons
+	parameter P_BITS = 10;									// Number of bits for perceptron
+	parameter P_NUM = 1024;									// Number of perceptrons
 
 	logic [W_BITS+N-1:0] theta;								// Threshold for training
 	logic [N-1:0] x;										// Global History Register  
