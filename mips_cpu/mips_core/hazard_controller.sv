@@ -228,6 +228,7 @@ module hazard_controller (
 		if (ex_flush) stats_event("ex_flush");
 		if (mem_stall) stats_event("mem_stall");
 		if (mem_flush) stats_event("mem_flush");
+		if (dec_branch_decoded.valid & ~dec_branch_decoded.is_jump & ~dec_stall) stats_event("branch_count");
 	end
 `endif
 

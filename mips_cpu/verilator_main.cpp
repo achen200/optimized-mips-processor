@@ -337,7 +337,8 @@ int main(int argc, char **argv)
 											(instruction_count + load_store_count) << std::endl;
 	std::cout << "Branches Predictions: " << stats["branch_pred"] << std::endl;
 	std::cout << "Branch Misses: " << stats["branch_miss"] << std::endl;
-	std::cout << "Branch Miss Rate: " << ((float) stats["branch_miss"])/stats["branch_pred"];
+	// std::cout << "Branch Miss Rate: " << ((float) stats["branch_miss"])/stats["branch_pred"];
+    std::cout << "Branch Miss Rate: " << (float) stats["ex_overload"]/stats["branch_count"] << std::endl;
 
     std::cout << "\n== Stats ===============\n";
 

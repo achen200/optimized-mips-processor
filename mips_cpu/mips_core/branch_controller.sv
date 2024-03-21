@@ -32,7 +32,7 @@ module branch_controller (
 	logic branch_miss;
 
 	// Change the following line to switch predictor
-	perceptron PREDICTOR (
+	branch_predictor_always_not_taken PREDICTOR (
 		.clk, .rst_n,
 
 		.i_req_valid     (request_prediction),
