@@ -64,7 +64,8 @@ module hazard_controller (
 		.dec_pc,
 		.dec_branch_decoded,
 		.ex_pc,
-		.ex_branch_result
+		.ex_branch_result,
+		.vp_lock
 	);
 
 	logic take_snapshot;

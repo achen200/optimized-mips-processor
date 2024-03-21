@@ -14,6 +14,7 @@
 module branch_controller (
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
+	input vp_lock,
 
 	// Request
 	pc_ifc.in dec_pc,
@@ -30,7 +31,7 @@ module branch_controller (
 	// Change the following line to switch predictor
 	perceptron PREDICTOR (
 		.clk, .rst_n,
-
+		.vp_lock,
 		.i_req_valid     (request_prediction),
 		.i_req_pc        (dec_pc.pc),
 		.i_req_target    (dec_branch_decoded.target),
@@ -58,6 +59,7 @@ endmodule
 module perceptron (
 	input clk,    // Clock
 	input rst_n,  // Synchronous reset active low
+	input vp_lock,
 
 	// Request
 	input logic i_req_valid,
@@ -102,7 +104,6 @@ module perceptron (
 		end
 	end
 
-
 	//Initial values for simulation
 	initial begin
 		theta = 27;
@@ -111,7 +112,6 @@ module perceptron (
 			for(int j = 0; j < N; j++) begin
 				w[i][j] = '0;
 			end
-			// counter[i] = 0;
 		end
 	end
 
@@ -125,9 +125,8 @@ module perceptron (
 
 	//Train
 	always_ff @(posedge clk) begin	
-		if (i_fb_valid) begin
+		if (i_fb_valid & ~vp_lock) begin
 			if (i_fb_prediction != i_fb_outcome | y_abs <= theta) begin
-				// counter[fb_hash] <= counter[fb_hash] + 1;
 				for (int i = 0; i < N; i++) begin
 					w[fb_hash][i] <= w[fb_hash][i] + (2*i_fb_outcome-1) * (2*x[i]-1);
 				end
@@ -150,17 +149,4 @@ module perceptron (
 		o_req_prediction = stored_y[r_hash][N-1] ? NOT_TAKEN : TAKEN;		 
 	end
 
-	// final begin
-	// 	for (int i = 0; i < P_NUM; i++) begin
-	// 		$display(i, " ", counter[i]);
-	// 	end
-	// end
-
 endmodule
-
-// TODO:
-// - Negative numbers are actually negative
-// - Training is completed? 
-// - Check if values are getting updated correctly
-// - Multiple perceptrons are owrking right (hash)
-// use most sig bit for hash
