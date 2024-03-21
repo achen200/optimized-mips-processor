@@ -57,7 +57,8 @@ module hazard_controller (
 	input recovery_done,
 	input [`DATA_WIDTH-1:0] r_to_s [32],
 	output [`DATA_WIDTH-1:0] s_to_r [32],
-	output recover_snapshot
+	output recover_snapshot,
+	output vp_lock
 );
 
 	branch_controller BRANCH_CONTROLLER (
@@ -70,7 +71,7 @@ module hazard_controller (
 	);
 
 	logic take_snapshot;
-	logic vp_en, vp_done, vp_lock;
+	logic vp_en, vp_done;
 	logic recover_en;
 	logic rs_done;
 	logic [`DATA_WIDTH-1:0] vp_pc, pred;
@@ -231,15 +232,15 @@ module hazard_controller (
  
 		//Handle load miss  
 		if(first_lmiss) begin	 
-			$display("========== VP1 begin ==========");
+			// $display("========== VP1 begin ==========");
 			vp_pc <= mem_pc.pc;
 			vp_en <= 1'b1;
 			take_snapshot <= 1'b1; 
 			recover_en <= 1'b1;
 			next <= 1'b1;
 		end
-		if (dec_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin
-			$display("========== VP2 begin ==========");
+		if (ex_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin
+			// $display("========== VP2 begin ==========");
 			ov_stall <= 1'b1;
 		end
 	end
@@ -403,9 +404,9 @@ module hazard_controller (
 		ic_prev <= ic_miss;
 		dc_prev <= dc_miss;
 		if (ic_miss & ~ic_prev) stats_event("ic_misses");
-		if (dc_miss & ~dc_prev) begin
+		if (dc_miss & ~dc_prev & ~vp_lock) begin
 			stats_event("dc_misses");
-			$display("dc_miss");
+			// $display("dc_miss");
 		end
 		if (vp_en) stats_event("VP_count");
 		if (vp_done) stats_event("VP_hit");

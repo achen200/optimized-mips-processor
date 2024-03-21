@@ -98,7 +98,7 @@ module mips_core (
 	write_back_ifc m2w_write_back();
 
 	// xxxx Hazard control
-	logic lw_hazard;
+	logic lw_hazard, vp_lock;
 	hazard_control_ifc i2i_hc();
 	hazard_control_ifc i2d_hc();
 	hazard_control_ifc d2e_hc();
@@ -352,7 +352,8 @@ module mips_core (
 		.d_cache_output(mem_d_cache_output),
 		.predicted_value,
 		.ex_req_in(e2m_d_cache_input), 
-		.dc_req_out
+		.dc_req_out,
+		.vp_lock
 	);
 
 	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
