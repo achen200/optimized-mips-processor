@@ -130,8 +130,31 @@ module hazard_controller (
 
 	logic output_vp;				//Whether to output vp or d-cache result
 	logic [`DATA_WIDTH-1:0] pc_out;	//PC checkpoint
+	
+	always_comb begin
+		if_stall_ov = ov_stall; //Stall overrides
+		dec_stall_ov = ov_stall;
+		ex_stall_ov = ov_stall;
+		mem_stall_ov = ov_stall;
 
-	/*** Value Prediction ***/
+		if_flush_ov = ov_flush;	//Flush overrides (must disable stalling)
+		dec_flush_ov = ov_flush;
+		ex_flush_ov = ov_flush;
+		mem_flush_ov = ov_flush;
+		if_stall_ov_off = ov_flush;
+		dec_stall_ov_off = ov_flush;
+		ex_stall_ov_off = ov_flush;
+		mem_stall_ov_off = ov_flush;
+	end
+
+	//Logic to select VP or D-cache output
+	always_comb begin
+		if(dc_req.valid & (vp_lock | (dc_req.mem_action == READ & ~d_cache_output.valid)))
+			output_vp = 1'b1;
+		else
+			output_vp = 1'b0;
+	end
+
 	always_comb begin
 		if(output_vp) begin
 			predicted_value.data = pred;
@@ -143,30 +166,7 @@ module hazard_controller (
 		end
 	end
 
-	always_comb begin
-		if_stall_ov = ov_stall;
-		dec_stall_ov = ov_stall;
-		ex_stall_ov = ov_stall;
-		mem_stall_ov = ov_stall;
-
-		if_flush_ov = ov_flush;
-		dec_flush_ov = ov_flush;
-		ex_flush_ov = ov_flush;
-		mem_flush_ov = ov_flush;
-		if_stall_ov_off = ov_flush;
-		dec_stall_ov_off = ov_flush;
-		ex_stall_ov_off = ov_flush;
-		mem_stall_ov_off = ov_flush;
-	end
-
-	//Handle stores - immediate execute
-	always_comb begin
-		if(dc_req.valid & (vp_lock | (dc_req.mem_action == READ & ~d_cache_output.valid)))
-			output_vp = 1'b1;
-		else
-			output_vp = 1'b0;
-	end
-
+	//Logic to preserve/select cache requests
 	always_comb begin
 		dc_req_out.valid = dc_req.valid;
 		dc_req_out.mem_action = dc_req.mem_action;
@@ -175,7 +175,6 @@ module hazard_controller (
 		dc_req_out.data = dc_req.data;
 	end
 
-	//Handle when cache_request is stored
 	always_comb begin
 		if(vp_lock | vp_en | ov_stall) begin
 			dc_req.valid = imm_dc_req.valid;
@@ -203,7 +202,7 @@ module hazard_controller (
 		end
 	end
 
-
+	/****** Value Prediction *****/
 	logic next, flushed;
 	logic first_lmiss;
 	assign first_lmiss = ex_req_in.valid && ex_req_in.mem_action == READ && ~vp_lock && ~d_cache_output.valid & ~next;
@@ -230,17 +229,15 @@ module hazard_controller (
 			next <= 1'b0;
 		end
  
-		//Handle load miss  
+		// Begin Value Prediction
 		if(first_lmiss) begin	 
-			// $display("========== VP1 begin ==========");
 			vp_pc <= mem_pc.pc;
 			vp_en <= 1'b1;
-			take_snapshot <= 1'b1; 
-			recover_en <= 1'b1;
+			take_snapshot <= 1'b1; //register snapshot
+			recover_en <= 1'b1;	
 			next <= 1'b1;
 		end
-		if (ex_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin
-			// $display("========== VP2 begin ==========");
+		if (ex_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin //Memory access during speculative execute
 			ov_stall <= 1'b1;
 		end
 	end

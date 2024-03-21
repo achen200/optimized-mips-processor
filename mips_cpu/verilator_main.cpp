@@ -325,6 +325,7 @@ int main(int argc, char **argv)
 	std::cout << "\n====== Custom Stats ====\n";
 	std::cout << "Load/Store Count: " << load_store_count << std::endl;
 	std::cout << "I-cache Miss Rate: " << (float)stats["ic_misses"]/instruction_count << std::endl;
+	std::cout << "D-cache Misses: " << ((float)stats["dc_misses"]- stats["VP_hit"])<< std::endl;
 	std::cout << "D-cache Miss Rate: " << ((float)stats["dc_misses"]- stats["VP_hit"])/load_store_count<< std::endl;
 	std::cout << "Branch Misses: " << stats["ex_overload"] << std::endl;
 	std::cout << "Branch Miss Rate: " << (float) stats["ex_overload"]/stats["branch_count"] << std::endl;

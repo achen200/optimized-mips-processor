@@ -4,16 +4,20 @@ module value_prediction #(
     parameter INDEX_WIDTH = 6
 ) (
     input clk, rst_n,
-	input vp_en, recovery_done, recover_en,
-    input [`ADDR_WIDTH - 1 : 0] addr,
+	input vp_en, 			//Enable value prediction
+	input recovery_done, 	//Whether reocvery has finished after misprediction
+	input recover_en,		//Enable recovery
+    input [`ADDR_WIDTH - 1 : 0] addr, //PC
 
     cache_output_ifc.in d_cache_data,
 	d_cache_input_ifc.in d_cache_req,
 
-    output [`DATA_WIDTH - 1 : 0] out, 
-	output [`ADDR_WIDTH - 1 : 0] last_predicted_pc,
-    output recover, vp_lock, out_valid,
-	output done 	//Only high when correct prediction
+    output [`DATA_WIDTH - 1 : 0] out, //Output data
+	output [`ADDR_WIDTH - 1 : 0] last_predicted_pc, //PC at which VP occurs
+    output recover, 	//Signal recovery
+	output vp_lock, 	//Prevent speculative load/store
+	output out_valid,	//If "out" is valid
+	output done 		//Only high when correct prediction
 );
 
 // Last predicted
@@ -22,7 +26,7 @@ logic [`DATA_WIDTH - 1 : 0] predicted;
 
 // Make prediction
 always_comb begin
-    predicted = '0; // predict all zeros for now
+    predicted = '0; 
 end
 
 always_ff @(posedge clk) begin

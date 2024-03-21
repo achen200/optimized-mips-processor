@@ -7,8 +7,7 @@ module i_stream_buffer #(
     parameter DATA_WIDTH = 32
 	)(
     // General signals
-	input clk,    // Clock
-	input rst_n,  // Synchronous reset active low
+	input clk, rst_n, 
 
 	// Request
 	pc_ifc.in i_pc_current,
@@ -24,15 +23,15 @@ module i_stream_buffer #(
 );	
 	localparam LINE_SIZE = 1 << BLOCK_OFFSET_WIDTH;
 	localparam TAG_WIDTH = `ADDR_WIDTH - INDEX_WIDTH - BLOCK_OFFSET_WIDTH - 2;
-	localparam LRU_WIDTH = 3; 	//set to log_2(buf_depth)
+	localparam BUF_INDEX_WIDTH = 3; 	//set to log_2(buf_depth)
 
     logic [DATA_WIDTH-1:0] data_table [BUF_DEPTH-1:0][LINE_SIZE-1:0];
     logic [`ADDR_WIDTH-1:0] pc_table [BUF_DEPTH-1:0];
 	logic [BUF_DEPTH-1:0] valid_bits;
 
 	logic [DATA_WIDTH-1:0] wdata;
-	logic [LRU_WIDTH-1:0] waddr;
-	logic [LRU_WIDTH-1:0] raddr;
+	logic [BUF_INDEX_WIDTH-1:0] waddr;
+	logic [BUF_INDEX_WIDTH-1:0] raddr;
 
 	logic [TAG_WIDTH-1:0] i_tag, n_tag;
 	logic [INDEX_WIDTH-1:0] i_index, n_index;
@@ -45,7 +44,6 @@ module i_stream_buffer #(
 	// Output of SB 1
     logic int_valid;
 	logic [DATA_WIDTH-1:0] int_data;
-	//logic [LRU_WIDTH:0] lru;
 
 	enum logic[1:0] {
 		STATE_READY,            // Ready for incoming requests
@@ -64,7 +62,7 @@ module i_stream_buffer #(
 	logic [LINE_SIZE-1:0] ctr, next_ctr; //Counters to stall
 	
 	assign {i_tag, i_index, i_block_offset} = i_pc_current.pc[`ADDR_WIDTH - 1 : 2];				
-	assign {n_tag, n_index} = {i_tag, i_index} + 1'b1; 		//Write information
+	assign {n_tag, n_index} = {i_tag, i_index} + 1'b1; 		//stream buffer fetch addr
 	assign raddr = {i_tag, i_index} % BUF_DEPTH;
 	assign waddr = {r_tag, r_index} %BUF_DEPTH;
 
@@ -121,7 +119,6 @@ module i_stream_buffer #(
 				STATE_REFILL_DATA:
 				begin
 					if(mem_read_data.RVALID) begin
-						// $display("STREAM REFILL_DATA: pc %h stored_pc %h memaddr %h value %h last_word %h", {n_tag, n_index}, {r_tag, r_index}, mem_read_address.ARADDR, wdata, last_refill_word); // wrote to %h, waddr
 						pc_table[waddr] <= {r_tag, r_index};
 						data_table[waddr][ctr] <= wdata;
 						valid_bits[waddr] <= last_refill_word;
