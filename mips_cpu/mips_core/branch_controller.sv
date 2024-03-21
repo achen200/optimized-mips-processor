@@ -9,9 +9,6 @@
  * See wiki page "Branch and Jump" for details.
  */
 `include "mips_core.svh"
-`ifdef SIMULATION
-import "DPI-C" function void stats_event (input string e);
-`endif
 
 
 module branch_controller (
@@ -29,7 +26,6 @@ module branch_controller (
 	logic request_prediction;
 	logic prev_req;
 	logic branch_count;
-	logic branch_miss;
 
 	// Change the following line to switch predictor
 	perceptron PREDICTOR (
@@ -48,163 +44,13 @@ module branch_controller (
 
 	always_comb
 	begin
-		prev_req = request_prediction;
 		request_prediction = dec_branch_decoded.valid & ~dec_branch_decoded.is_jump;
-
-		if(~prev_req & request_prediction) branch_count = 1'b1;
-		if(ex_branch_result.valid & (ex_branch_result.prediction != ex_branch_result.outcome))
-		begin
-			branch_miss = 1'b1;
-		end
 
 		dec_branch_decoded.recovery_target =
 			(dec_branch_decoded.prediction == TAKEN)
 			? dec_pc.pc + `ADDR_WIDTH'd8
 			: dec_branch_decoded.target;
 		
-	end
-`ifdef SIMULATION
-	always_ff @(posedge clk)
-	begin
-		if(branch_count) 
-		begin
-			stats_event("branch_pred");
-			branch_count = 1'b0;
-		end
-		if(branch_miss)
-		begin
-			stats_event("branch_miss");
-			branch_miss = 1'b0;
-		end
-	end
-`endif
-
-endmodule
-
-module branch_predictor_always_not_taken (
-	input clk,    // Clock
-	input rst_n,  // Synchronous reset active low
-
-	// Request
-	input logic i_req_valid,
-	input logic [`ADDR_WIDTH - 1 : 0] i_req_pc,
-	input logic [`ADDR_WIDTH - 1 : 0] i_req_target,
-	output mips_core_pkg::BranchOutcome o_req_prediction,
-
-	// Feedback
-	input logic i_fb_valid,
-	input logic [`ADDR_WIDTH - 1 : 0] i_fb_pc,
-	input mips_core_pkg::BranchOutcome i_fb_prediction,
-	input mips_core_pkg::BranchOutcome i_fb_outcome
-);
-
-	always_comb
-	begin
-		o_req_prediction = NOT_TAKEN;
-	end
-endmodule
-
-module branch_predictor_always_taken(
-	input clk,    // Clock
-	input rst_n,  // Synchronous reset active low
-
-	// Request
-	input logic i_req_valid,
-	input logic [`ADDR_WIDTH - 1 : 0] i_req_pc,
-	input logic [`ADDR_WIDTH - 1 : 0] i_req_target,
-	output mips_core_pkg::BranchOutcome o_req_prediction,
-
-	// Feedback
-	input logic i_fb_valid,
-	input logic [`ADDR_WIDTH - 1 : 0] i_fb_pc,
-	input mips_core_pkg::BranchOutcome i_fb_prediction,
-	input mips_core_pkg::BranchOutcome i_fb_outcome
-);
-	always_comb
-	begin
-		o_req_prediction = TAKEN;
-	end
-endmodule
-
-module branch_predictor_backward_taken(
-	input clk,    // Clock
-	input rst_n,  // Synchronous reset active low
-
-	// Request
-	input logic i_req_valid,
-	input logic [`ADDR_WIDTH - 1 : 0] i_req_pc,
-	input logic [`ADDR_WIDTH - 1 : 0] i_req_target,
-	output mips_core_pkg::BranchOutcome o_req_prediction,
-
-	// Feedback
-	input logic i_fb_valid,
-	input logic [`ADDR_WIDTH - 1 : 0] i_fb_pc,
-	input mips_core_pkg::BranchOutcome i_fb_prediction,
-	input mips_core_pkg::BranchOutcome i_fb_outcome
-);
-	always_comb
-	begin
-		if(i_req_target <= i_req_pc)
-			o_req_prediction = TAKEN;
-		else
-			o_req_prediction = NOT_TAKEN;
-	end
-endmodule
-
-module branch_predictor_2bit (
-	input clk,    // Clock
-	input rst_n,  // Synchronous reset active low
-
-	// Request
-	input logic i_req_valid,
-	input logic [`ADDR_WIDTH - 1 : 0] i_req_pc,
-	input logic [`ADDR_WIDTH - 1 : 0] i_req_target,
-	output mips_core_pkg::BranchOutcome o_req_prediction,
-
-	// Feedback
-	input logic i_fb_valid,
-	input logic [`ADDR_WIDTH - 1 : 0] i_fb_pc,
-	input mips_core_pkg::BranchOutcome i_fb_prediction,
-	input mips_core_pkg::BranchOutcome i_fb_outcome
-);
-
-	logic [1:0] counter;
-
-	task incr;
-		begin
-			if (counter != 2'b11)
-				counter <= counter + 2'b01;
-		end
-	endtask
-
-	task decr;
-		begin
-			if (counter != 2'b00)
-				counter <= counter - 2'b01;
-		end
-	endtask
-
-	always_ff @(posedge clk)
-	begin
-		if(~rst_n)
-		begin
-			counter <= 2'b01;	// Weakly not taken
-		end
-		else
-		begin
-			if (i_fb_valid)
-			begin
-				case (i_fb_outcome)
-					NOT_TAKEN: decr();
-					TAKEN:     incr();
-				endcase
-			end
-		end
-	end
-
-	always_comb
-	begin
-		o_req_prediction = counter[1] ? TAKEN : NOT_TAKEN;
 	end
 
 endmodule

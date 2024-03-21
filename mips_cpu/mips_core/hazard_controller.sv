@@ -15,6 +15,9 @@
  * See wiki page "Branch and Jump" for details of branch and jump instructions.
  */
 `include "mips_core.svh"
+`ifdef SIMULATION
+import "DPI-C" function void stats_event (input string e);
+`endif
 
 module hazard_controller (
 	input clk,    // Clock
@@ -25,7 +28,6 @@ module hazard_controller (
 	// Feedback from DEC
 	pc_ifc.in dec_pc,
 	branch_decoded_ifc.hazard dec_branch_decoded,
-	alu_pass_through_ifc.in dec_pass,
 	// Feedback from EX
 	pc_ifc.in ex_pc,
 	input lw_hazard,
@@ -102,8 +104,6 @@ module hazard_controller (
 	logic ex_overload;		// Branch prediction wrong
 	//    lw_hazard;		// Load word hazard (input from forward unit)
 	logic dc_miss;			// D cache miss
-	logic inc_ic_amiss;
-	logic branch_miss;
 	logic branch_hit;
 
 	// Control signals
@@ -206,9 +206,10 @@ module hazard_controller (
 	assign first_lmiss = ex_req_in.valid && ex_req_in.mem_action == READ && ~vp_lock && ~d_cache_output.valid & ~next;
 
 	always_ff @(posedge clk) begin
-		if(~vp_lock & vp_done & ov_stall) begin	// 
-			ov_stall <= 1'b0;
+		if(vp_done) begin
 			recover_en <= 1'b0;
+			if(ov_stall)
+				ov_stall <= 1'b0;
 		end
 		if(recover_snapshot) begin
 			recover_en <= 1'b0; 
@@ -228,7 +229,7 @@ module hazard_controller (
  
 		//Handle load miss  
 		if(first_lmiss) begin	 
-			$display("========== VP1 begin ==========");
+			// $display("========== VP1 begin ==========");
 			vp_pc <= mem_pc.pc;
 			vp_en <= 1'b1;
 			take_snapshot <= 1'b1; 
@@ -236,7 +237,7 @@ module hazard_controller (
 			next <= 1'b1;
 		end
 		if (ex_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin
-			$display("========== VP2 begin ==========");
+			// $display("========== VP2 begin ==========");
 			ov_stall <= 1'b1;
 		end
 	end
@@ -394,23 +395,18 @@ module hazard_controller (
 	end
 
 `ifdef SIMULATION
-	always@(ic_miss) begin
-		if(ic_miss) begin 
-			stats_event("ic_misses");
-			inc_ic_amiss = 1'b1;
-		end
-	end
-	always @(dc_miss) 
-		if(dc_miss) stats_event("dc_misses");
-	always @(recover_snapshot)
-		if(recover_snapshot) stats_event("VP miss");
-	always @(vp_done)
-		if(vp_done) stats_event("VP hit");
-
+	logic ic_prev, dc_prev;
 	always_ff @(posedge clk)
 	begin
-		if (inc_ic_amiss) inc_ic_amiss = 1'b0;
-		if (ic_miss) stats_event("ic_miss_cycles");
+		ic_prev <= ic_miss;
+		dc_prev <= dc_miss;
+		if (ic_miss & ~ic_prev) stats_event("ic_misses");
+		if (dc_miss & ~dc_prev) stats_event("dc_misses");
+		if (vp_en) stats_event("VP_count");
+		if (vp_done) stats_event("VP_hit");
+		if (dec_branch_decoded.valid & ~dec_branch_decoded.is_jump & ~dec_stall) stats_event("branch_count");
+
+		if (ic_miss) stats_event("ic_miss_cycles"); 
 		if (ds_miss) stats_event("ds_miss");
 		if (dec_overload) stats_event("dec_overload");
 		if (ex_overload) stats_event("ex_overload");
