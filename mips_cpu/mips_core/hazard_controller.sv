@@ -28,6 +28,7 @@ module hazard_controller (
 	// Feedback from DEC
 	pc_ifc.in dec_pc,
 	branch_decoded_ifc.hazard dec_branch_decoded,
+	alu_pass_through_ifc.in dec_ctl,
 	// Feedback from EX
 	pc_ifc.in ex_pc,
 	input lw_hazard,
@@ -230,15 +231,15 @@ module hazard_controller (
  
 		//Handle load miss  
 		if(first_lmiss) begin	 
-			// $display("========== VP1 begin ==========");
+			$display("========== VP1 begin ==========");
 			vp_pc <= mem_pc.pc;
 			vp_en <= 1'b1;
 			take_snapshot <= 1'b1; 
 			recover_en <= 1'b1;
 			next <= 1'b1;
 		end
-		if (ex_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin
-			// $display("========== VP2 begin ==========");
+		if (dec_ctl.is_mem_access & (vp_lock | vp_en) & ~ov_stall) begin
+			$display("========== VP2 begin ==========");
 			ov_stall <= 1'b1;
 		end
 	end
@@ -402,7 +403,10 @@ module hazard_controller (
 		ic_prev <= ic_miss;
 		dc_prev <= dc_miss;
 		if (ic_miss & ~ic_prev) stats_event("ic_misses");
-		if (dc_miss & ~dc_prev) stats_event("dc_misses");
+		if (dc_miss & ~dc_prev) begin
+			stats_event("dc_misses");
+			$display("dc_miss");
+		end
 		if (vp_en) stats_event("VP_count");
 		if (vp_done) stats_event("VP_hit");
 		if (dec_branch_decoded.valid & ~dec_branch_decoded.is_jump & ~dec_stall) stats_event("branch_count");

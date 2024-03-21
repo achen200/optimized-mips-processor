@@ -56,11 +56,11 @@ always_ff @(posedge clk) begin
 		first <= 1'b0;
 		if(first) begin
 			if(d_cache_data.data != last_predicted) begin
-				// $display("VP: Incorrect prediction detected, recovery begins next cycle");
+				$display("VP: Incorrect prediction detected, recovery begins next cycle");
 				recover <= 1'b1;
 			end
 			else begin
-				// $display("VP: Prediction correct detected, no need to recover");
+				$display("VP: Prediction correct detected, no need to recover");
 				vp_lock <= 1'b0;
 				done <= 1'b1;
 				out_valid <= 1'b0;
