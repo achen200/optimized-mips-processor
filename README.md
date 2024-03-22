@@ -1,8 +1,25 @@
-# CSE 148 Baseline version 3.3
+# CSE 148
+Optimizations: 
+1.  Branch Predictor 
+2.  Hardware Prefetching
+3.  Value Prediction
+4.  Cache Set Dueling
 
-## Release v3.3 01/10/2024 Jiayan Dong: Adding support to generate benchmarks/hex files.
+### Branch Predictor - Perceptron
+Modified Files:
+- `branch_controllver.sv`
+- `verilator_main.cpp` (only custom stats)
 
-## Release v2.2 04/12/2018 Zinsser Zhang
+### Hardware Prefetching - I-Cache Stream Buffer
+Modified Files:
+- `i_stream_buffer.sv`
+- `mips_core.sv`
 
-Please refer to the wiki page **Walkthrough** for instructions to play around the design really quick.
-Detailed documentations can be found in the wiki of this repository.
+### Value Prediction 
+Modified Files:
+- `hazard_controller.sv`
+- `value_prediction.sv`
+- `reg_file.sv`
+- `register_snapshot.sv`
+- `mips_core.sv`
+- `verilator_main.cpp` (only the custom stats)
