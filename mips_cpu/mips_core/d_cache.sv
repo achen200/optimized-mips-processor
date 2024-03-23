@@ -110,11 +110,11 @@ module d_cache #(
 	logic r_select_way;
 	logic [DEPTH - 1 : 0] lru_rp;
 	logic [DEPTH - 1 : 0] bip;
-	logic [1 : 0] bip_val [DEPTH];
+	logic [1 : 0] bip_val [DEPTH];			// Determine how frequent to set inserted data as mru
 	logic [DEPTH - 1 : 0] used0;
-	logic [DEPTH - 1 : 0] used1;
-	logic [1 : 0] selector;
-	logic selector_en, bip_val_en;
+	logic [DEPTH - 1 : 0] used1;			// make sure both ways are used
+	logic [1 : 0] selector;					// select between bip and lru
+	logic selector_en, bip_val_en;			// to make sure selector is only changed once
 
 	// databanks
 	genvar g,w;
@@ -209,7 +209,6 @@ module d_cache #(
 		end
 		else if (miss)
 		begin
-			// select_way = lru_rp[i_index];
 			if (~used0[i_index]) begin
 				select_way = 'b0;
 			end
@@ -221,22 +220,17 @@ module d_cache #(
 					
 					if (selector_en) begin
 						if (~i_index[0]) begin
-							// $display("selector: %b, i_index: %h", selector, i_index);
 							// use bip
-							// $display("using bip 1");
 							select_way = bip[i_index];
 							if (selector != 2'b11)
 								selector = selector + 1;
 						end
 						else begin
-							// $display("selector: %b, i_index: %h", selector, i_index);
 							// use lru
-							// $display("using lru 1");
 							select_way = lru_rp[i_index];
 							if (selector != 2'b00)
 								selector = selector - 1;
 						end
-						// $display("disabling selector");
 						selector_en = 0;
 					end
 					else begin
@@ -248,12 +242,10 @@ module d_cache #(
 					// use selector
 					if (selector[1]) begin
 						// use lru
-						// $display("using lru 2");
 						select_way = lru_rp[i_index];
 					end
 					else begin
 						// use bip
-						// $display("using bip 2");
 						select_way = bip[i_index];
 					end
 				end
@@ -427,27 +419,22 @@ module d_cache #(
 							used1[i_index] <= 'b1;
 						else
 							used0[i_index] <= 'b1;
+						// set lru
 						lru_rp[i_index] <= ~select_way;
-						// $display("i_index: %h", i_index);
-						// if (hit)
-						// $display("hit");
-						// else
-						// $display("miss");
+
+						// set bip
 						if (bip_val_en && (hit || bip_val[i_index] == 2'b11)) begin
 							bip[i_index] <= select_way;
 							bip_val[i_index] <= 2'b00;
 							bip_val_en = 1'b0;
-							// $display("1 bip[i_index]: %b, select_way: %b, i_index: %h", bip[i_index], select_way, i_index);
 						end
 						else if (bip_val_en)begin
 							bip[i_index] <= ~select_way;
 							bip_val[i_index] <= bip_val[i_index] + 1;
 							bip_val_en = 1'b0;
-							// $display("2 bip[i_index]: %b, select_way: %b, i_index: %h", bip[i_index], select_way, i_index);
 						end
 						else begin
 							bip[i_index] <= bip[i_index];
-							// $display("holding bip[i_index]");
 						end
 					end
 				end
