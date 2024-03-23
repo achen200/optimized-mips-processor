@@ -24,6 +24,6 @@ Modified Files:
 - `mips_core.sv`
 - `verilator_main.cpp` (only the custom stats)
 
-### Value Prediction 
+### Cache Set Dueling
 Modified Files:
 - `d_cache.sv`
