@@ -23,3 +23,7 @@ Modified Files:
 - `register_snapshot.sv`
 - `mips_core.sv`
 - `verilator_main.cpp` (only the custom stats)
+
+### Value Prediction 
+Modified Files:
+- `d_cache.sv`
